@@ -16,6 +16,7 @@ df = pd.DataFrame(xauusd_ticks)
 ind.macd(df)
 ind.atr(df)
 
+pd.options.display.max_columns = None
 print(df)
 
 mt5.shutdown()

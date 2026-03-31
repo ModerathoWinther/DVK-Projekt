@@ -1,37 +1,56 @@
 import MetaTrader5 as mt5
 import pandas as pd
+import pytz
+from datetime import datetime
+import time
+import os
 
 
+def fetch_and_save_data(symbol="XAUUSD", timeframe=mt5.TIMEFRAME_M1):
 
-def fetch_and_save_data(symbol="XAUUSD", timeframe=mt5.TIMEFRAME_H1, n_bars=5000):
-        if not mt5.initialize():
-            print("MT5 initialize() failed, error code =", mt5.last_error())
-            return
+    if not mt5.initialize():
+        print(f"MT5 initialize() failed, error code = {mt5.last_error()}")
+        return
 
-        print(f"Fetching {n_bars} bars for {symbol}...")
-
-
-        rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, n_bars)
-
+    selected = mt5.symbol_select(symbol, True)
+    if not selected:
+        print(f"Failed to select {symbol}")
         mt5.shutdown()
+        return
 
-        df = pd.DataFrame(rates)
+    print(f"Synchronizing history for {symbol}...")
+    time.sleep(2)
 
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+    timezone = pytz.timezone("Etc/UTC")
 
-        df = df.rename(columns={'time': 'date', 'tick_volume': 'volume'})
-        df['tic'] = symbol
+    date_from = datetime(2016, 1, 5, tzinfo=timezone)
+    date_to = datetime(2017, 12, 31, hour=23, tzinfo=timezone)
 
-        final_df = df[['date', 'open', 'high', 'low', 'close', 'volume', 'tic']]
+    rates = mt5.copy_rates_range(symbol, timeframe, date_from, date_to)
 
-        file_name = f"data/{symbol}_{n_bars}_bars.csv"
+    if rates is None or len(rates) == 0:
+        print(f"Error: No data retrieved. Error code: {mt5.last_error()}")
+        mt5.shutdown()
+        return
 
-        import os
-        if not os.path.exists('data'):
-            os.makedirs('data')
+    mt5.shutdown()
 
-        final_df.to_csv(file_name, index=False)
-        print(f"Successfully saved {len(final_df)} rows to {file_name}")
+    df = pd.DataFrame(rates)
+    df['time'] = pd.to_datetime(df['time'], unit='s')
+    df = df.rename(columns={'time': 'date', 'tick_volume': 'volume'})
+    df['tick'] = symbol
+
+    final_df = df[['date', 'open', 'high', 'low', 'close', 'volume', 'tick']]
+
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
+    actual_rows = len(final_df)
+    file_name = f"data/{symbol}_{timeframe}_{actual_rows}_rows.csv"
+
+    final_df.to_csv(file_name, index=False)
+    print(f"Successfully saved {actual_rows} rows to {file_name}")
+    print(f"Data range: {final_df['date'].min()} to {final_df['date'].max()}")
 
 
-fetch_and_save_data()
+fetch_and_save_data("XAUUSD", mt5.TIMEFRAME_M1)

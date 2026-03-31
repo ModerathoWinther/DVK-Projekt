@@ -5,7 +5,9 @@ def atr(dataframe):
     dataframe['atr'] = talib.ATR(
         dataframe['high'],
         dataframe['low'],
-        dataframe['close'])
+        dataframe['close'],
+        timeperiod=14)
+
 
 def macd(dataframe):
     dataframe['macd'], dataframe['macd_signal'], dataframe['macd_histogram'] = talib.MACD(
@@ -14,5 +16,8 @@ def macd(dataframe):
         slowperiod=26,
         signalperiod=9)
 
+
 def rsi(dataframe):
-    return 0
+    dataframe['rsi'] = talib.RSI(
+        dataframe['close'],
+        timeperiod=14)

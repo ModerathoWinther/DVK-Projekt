@@ -15,6 +15,7 @@ xauusd_ticks = mt5.copy_rates_from("XAUUSD", mt5.TIMEFRAME_H1, datetime(2020, 1,
 df = pd.DataFrame(xauusd_ticks)
 ind.macd(df)
 ind.atr(df)
+ind.rsi(df)
 
 pd.options.display.max_columns = None
 print(df)

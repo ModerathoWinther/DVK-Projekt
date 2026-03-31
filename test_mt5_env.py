@@ -11,7 +11,7 @@ if not mt5.initialize():
 print("terminal info: ", mt5.terminal_info())
 print("version: ", mt5.version())
 
-xauusd_ticks = mt5.copy_rates_from("XAUUSD", mt5.TIMEFRAME_H1, datetime(2020, 1, 10), 100)
+xauusd_ticks = mt5.copy_rates_from("XAUUSD", mt5.TIMEFRAME_H1, datetime(2020, 1, 10), 50)
 df = pd.DataFrame(xauusd_ticks)
 ind.macd(df)
 ind.atr(df)

@@ -39,9 +39,8 @@ def fetch_and_save_data():
     df = pd.DataFrame(rates)
     df['time'] = pd.to_datetime(df['time'], unit='s')
     df = df.rename(columns={'time': 'date', 'tick_volume': 'volume'})
-    df['tick'] = SYMBOL
 
-    final_df = df[['date', 'open', 'high', 'low', 'close', 'volume', 'tick']]
+    final_df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 

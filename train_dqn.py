@@ -32,8 +32,8 @@ def grad(model, inputs, targets):
 
 
 if __name__ == "__main__":
-    inputs, trades = init_state.run("test", 5, atr=True)
-    print(inputs)
+    market_data, trades = init_state.run("test", 5, atr=True)
+    print(market_data)
     print(trades)
 
 

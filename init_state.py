@@ -8,7 +8,7 @@ INDICATOR_DIR = dp.OUTPUT_DIR
 ENTRY_PER_TRADE = 4
 
 
-def get_inputs(split, atr=False, macd=False, rsi=False):
+def get_market_data(split, atr=False, macd=False, rsi=False):
     price = pd.read_csv(f"{PRICE_DIR}/{split}/raw_{split}.csv",
                      index_col="date", parse_dates=["date"])
 
@@ -22,14 +22,14 @@ def get_inputs(split, atr=False, macd=False, rsi=False):
     if rsi:
         frames.append(pd.read_csv(f"{INDICATOR_DIR}/{split}/rsi.csv",
                                   index_col="date", parse_dates=["date"]))
-    inputs = pd.concat(frames, axis=1).dropna()
-    return inputs.to_numpy()
+    market_data = pd.concat(frames, axis=1).dropna()
+    return market_data.to_numpy()
 
 def init_trades(num_trades):
     return numpy.zeros(num_trades * ENTRY_PER_TRADE)
 
 def run(split, num_trades, atr=False, macd=False, rsi=False):
-    inputs = get_inputs(split, atr=atr, macd=macd, rsi=rsi)
+    market_data = get_market_data(split, atr=atr, macd=macd, rsi=rsi)
     trades = init_trades(num_trades)
-    return inputs, trades
+    return market_data, trades
 

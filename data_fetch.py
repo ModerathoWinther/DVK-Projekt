@@ -47,7 +47,7 @@ def fetch_and_save_data(symbol="XAUUSD", timeframe=mt5.TIMEFRAME_M15):
         os.makedirs('data/raw')
 
     actual_rows = len(final_df)
-    fn = fn = f"data/raw/{symbol}_{timeframe}M_{date_from.date()}_{date_to.date()}.csv"
+    fn = f"data/raw/{symbol}_{timeframe}M_{date_from.date()}_{date_to.date()}.csv"
 
     final_df.to_csv(fn, index=False)
     print(f"Successfully saved {actual_rows} rows to {fn}")
@@ -73,8 +73,6 @@ def partition_fetched_data():
 
     processed_dir = 'data/processed'
     os.makedirs(processed_dir, exist_ok=True)
-
-    symbol = "XAUUSD"
 
     train_path = f"{processed_dir}/train.csv"
     val_path   = f"{processed_dir}/validation.csv"

@@ -9,23 +9,6 @@ SPLITS      = ["train", "val", "test"]
 SYMBOL      = "XAUUSD"
 
 
-def get_inputs(split, atr=False, macd=False, rsi=False):
-    price = pd.read_csv(f"{INPUT_DIR}/{split}/raw_{split}.csv",
-                     index_col="date", parse_dates=["date"])
-
-    frames = [price]
-    if atr:
-        frames.append(pd.read_csv(f"{OUTPUT_DIR}/{split}/atr.csv",
-                                      index_col="date", parse_dates=["date"]))
-    if macd:
-        frames.append(pd.read_csv(f"{OUTPUT_DIR}/{split}/macd.csv",
-                                      index_col="date", parse_dates=["date"]))
-    if rsi:
-        frames.append(pd.read_csv(f"{OUTPUT_DIR}/{split}/rsi.csv",
-                                      index_col="date", parse_dates=["date"]))
-    return pd.concat(frames, axis=1).dropna()
-
-
 def load_split(split: str) -> pd.DataFrame:
     print(INPUT_DIR)
     path = os.path.join(INPUT_DIR, f"{split}/raw_{split}.csv")

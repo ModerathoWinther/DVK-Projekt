@@ -85,5 +85,6 @@ def partition_fetched_data():
     print(f"Saved splits to {OUTPUT_DIR}/X_path")
     return train_path, val_path, test_path
 
-FILE_NAME = fetch_and_save_data()
-partition_fetched_data()
+if __name__ == "__main__":
+    FILE_NAME = fetch_and_save_data()
+    partition_fetched_data()

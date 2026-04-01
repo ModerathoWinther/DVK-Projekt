@@ -164,4 +164,5 @@ def run():
         save_separate_indicator_files(normalized, split)
         save_merged_file(normalized, split)
 
-run()
+if __name__ == "__main__":
+    run()

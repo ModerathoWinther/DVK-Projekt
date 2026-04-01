@@ -1,9 +1,11 @@
+import numpy
 import pandas as pd
 import data_process as dp
 
 
 PRICE_DIR = dp.INPUT_DIR
 INDICATOR_DIR = dp.OUTPUT_DIR
+ENTRY_PER_TRADE = 4
 
 
 def get_inputs(split, atr=False, macd=False, rsi=False):
@@ -23,7 +25,11 @@ def get_inputs(split, atr=False, macd=False, rsi=False):
     inputs = pd.concat(frames, axis=1).dropna()
     return inputs.to_numpy()
 
-def run(split, atr=False, macd=False, rsi=False):
+def init_trades(num_trades):
+    return numpy.zeros(num_trades * ENTRY_PER_TRADE)
+
+def run(split, num_trades, atr=False, macd=False, rsi=False):
     inputs = get_inputs(split, atr=atr, macd=macd, rsi=rsi)
-    return inputs
+    trades = init_trades(num_trades)
+    return inputs, trades
 

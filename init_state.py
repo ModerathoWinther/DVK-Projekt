@@ -5,7 +5,7 @@ import data_process as dp
 
 PRICE_DIR = dp.INPUT_DIR
 INDICATOR_DIR = dp.OUTPUT_DIR
-ENTRY_PER_TRADE = 4
+ENTRY_PER_TRADE = 2
 
 _train_mean = None
 _train_std = None

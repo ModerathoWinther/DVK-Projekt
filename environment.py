@@ -19,6 +19,8 @@ class environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
         self.index = 0
+        self.num_trades = num_trades
+        self.open_slots = num_trades
         self.market_data, self.trades = init_state.run(split, num_trades, ENTRY_PER_TRADE, atr=atr, macd=macd, rsi=rsi)
 
     def get_current_state(self):
@@ -33,13 +35,29 @@ class environment:
             case action.HOLD:
                 return self.get_current_state()
             case _:
-                self.trades[ACTION_INDEX] = action.value
-                self.trades[PRICE_INDEX] = state[3]
+                if not self.can_trade():
+                    raise Exception("No open slots")
+
+                empty_trade = -1
+                for i in range(self.num_trades):
+                    if self.trades[i * ENTRY_PER_TRADE] == 0:
+                        empty_trade = i * ENTRY_PER_TRADE
+                        break
+
+                self.trades[empty_trade + ACTION_INDEX] = action.value
+                self.trades[empty_trade + PRICE_INDEX] = state[3]
+                self.open_slots -= 1
                 return self.get_current_state()
+
+    def can_trade(self):
+        return self.open_slots > 0
 
 
 if __name__ == "__main__":
-    env = environment("test", 1, atr=True, macd=True, rsi=True)
+    env = environment("test", 2, atr=True, macd=True, rsi=True)
     print(env.get_current_state())
     print(env.perform_action(action.HOLD))
     print(env.perform_action(action.SELL))
+    print(env.perform_action(action.BUY))
+    # Should throw an Exception because too many trades
+    # print(env.perform_action(action.BUY))

@@ -10,12 +10,12 @@ PRICE_INDEX = 1
 ENTRY_PER_TRADE = 2
 
 
-class action(Enum):
+class Action(Enum):
     SELL = -1
     HOLD = 0
     BUY = 1
 
-class environment:
+class Environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
         self.index = 0
@@ -54,10 +54,10 @@ class environment:
 
 
 if __name__ == "__main__":
-    env = environment("test", 2, atr=True, macd=True, rsi=True)
+    env = Environment("test", 2, atr=True, macd=True, rsi=True)
     print(env.get_current_state())
-    print(env.perform_action(action.HOLD))
-    print(env.perform_action(action.SELL))
-    print(env.perform_action(action.BUY))
+    print(env.perform_action(Action.HOLD))
+    print(env.perform_action(Action.SELL))
+    print(env.perform_action(Action.BUY))
     # Should throw an Exception because too many trades
     # print(env.perform_action(action.BUY))

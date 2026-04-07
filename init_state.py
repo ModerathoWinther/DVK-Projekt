@@ -1,3 +1,5 @@
+import os
+
 import numpy
 import pandas as pd
 import data_process as dp
@@ -30,6 +32,9 @@ def get_market_data(split, atr=False, macd=False, rsi=False, normalize=True):
     if normalize:
         global _train_mean, _train_std
 
+        stats_path_mean = "data/processed/train_mean.csv"
+        stats_path_std  = "data/processed/train_std.csv"
+
         if split == "train":
             _train_mean = market_data.mean()
             _train_std = market_data.std()
@@ -38,6 +43,8 @@ def get_market_data(split, atr=False, macd=False, rsi=False, normalize=True):
             _train_std.to_csv("data/processed/train_std.csv")
 
         else:
+            if not os.path.exists(stats_path_mean) or not os.path.exists(stats_path_std):
+                get_market_data("train", atr=atr, macd=macd, rsi=rsi, normalize=True)
             if _train_mean is None or _train_std is None:
                 _train_mean = pd.read_csv("data/processed/train_mean.csv", index_col=0).squeeze()
                 _train_std = pd.read_csv("data/processed/train_std.csv", index_col=0).squeeze()

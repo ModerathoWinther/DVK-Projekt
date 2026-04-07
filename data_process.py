@@ -9,13 +9,14 @@ INPUT_DIR = data_fetch.OUTPUT_DIR
 OUTPUT_DIR = "data/processed/indicators"
 SPLITS = ["train", "val", "test"]
 SYMBOL = "XAUUSD"
+NORMALIZED_OUTPUT = "data/processed/normalized/train.csv"
 
 
 def load_split(split: str) -> pd.DataFrame:
     print(INPUT_DIR)
     path = os.path.join(INPUT_DIR, f"{split}/raw_{split}.csv")
     if not os.path.isfile(path):
-        raise FileNotFoundError(f"Expected file not found: {path}")
+        data_fetch.run()
     df = pd.read_csv(path, parse_dates=["date"])
     df = df.sort_values("date").reset_index(drop=True)
     print(f"  Loaded {split:>10}: {len(df):>6} rows  "
@@ -45,6 +46,7 @@ def validate_ohlcv(df: pd.DataFrame, split: str) -> None:
     if large_gaps:
         print(f"  WARNING [{split}]: {large_gaps} time gaps larger than 3× "
               f"the modal interval ({modal_gap}) — possible missing bars")
+
 
 
 def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -94,7 +96,6 @@ def apply_normalization(df: pd.DataFrame, params: dict) -> pd.DataFrame:
 def save_separate_indicator_files(df: pd.DataFrame, split: str) -> None:
     sep_dir = os.path.join(OUTPUT_DIR, split)
     os.makedirs(sep_dir, exist_ok=True)
-
     grouped = {
         "macd": ["macd", "macd_signal", "macd_histogram"],
     }
@@ -104,10 +105,35 @@ def save_separate_indicator_files(df: pd.DataFrame, split: str) -> None:
     for name, cols in grouped.items():
         path = os.path.join(sep_dir, f"{name}.csv")
         df[["date"] + cols].to_csv(path, index=False)
-
     for col in singles:
         path = os.path.join(sep_dir, f"{col}.csv")
         df[["date", col]].to_csv(path, index=False)
+
+
+def compute_price_zscore_params(df_train: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    price_cols = ["open", "high", "low", "close", "volume"]
+    price_mean = df_train[price_cols].mean()
+    price_std = df_train[price_cols].std()
+
+    for col in price_cols:
+        print(f"    {col:<8}  mean={price_mean[col]:>12.4f}   std={price_std[col]:>12.4f}")
+
+    return price_mean, price_std
+
+
+def apply_price_zscore(df: pd.DataFrame, price_mean: pd.Series, price_std: pd.Series) -> pd.DataFrame:
+    price_cols = ["open", "high", "low", "close", "volume"]
+    df_out = df[["date"] + price_cols].copy()
+    for col in price_cols:
+        df_out[col] = (df[col] - price_mean[col]) / (price_std[col] + 1e-8)
+    return df_out
+
+
+def save_normalized_prices(df: pd.DataFrame) -> None:
+    os.makedirs(os.path.dirname(NORMALIZED_OUTPUT), exist_ok=True)
+    df.to_csv(NORMALIZED_OUTPUT, index=False)
+    print(f"  Saved Z-score normalized training prices → {NORMALIZED_OUTPUT}")
+
 
 def run():
     splits_raw = {}
@@ -123,13 +149,16 @@ def run():
         splits_ind[split] = build_indicators(df.copy())
 
     norm_params = fit_normalization_params(splits_ind["train"])
-    for col, p in norm_params.items():
-        print(f"  {col:<15}  min={p['min']:>10.4f}   max={p['max']:>10.4f}")
 
     for split, df in splits_ind.items():
         print(f"  {split}:")
         normalized = apply_normalization(df, norm_params)
         save_separate_indicator_files(normalized, split)
+
+    # Calculate Z-value for the training dataset
+    price_mean, price_std = compute_price_zscore_params(splits_raw["train"])
+    train_prices_normalized = apply_price_zscore(splits_raw["train"], price_mean, price_std)
+    save_normalized_prices(train_prices_normalized)
 
 
 if __name__ == "__main__":

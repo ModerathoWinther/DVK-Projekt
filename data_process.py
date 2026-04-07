@@ -143,23 +143,14 @@ def run():
     for split, df in splits_raw.items():
         validate_ohlcv(df, split)
 
-    splits_ind = {}
-    for split, df in splits_raw.items():
-        print(f"  {split}:")
-        splits_ind[split] = build_indicators(df.copy())
-
-    norm_params = fit_normalization_params(splits_ind["train"])
-
-    for split, df in splits_ind.items():
-        print(f"  {split}:")
-        normalized = apply_normalization(df, norm_params)
-        save_separate_indicator_files(normalized, split)
-
-    # Calculate Z-value for the training dataset
     price_mean, price_std = compute_price_zscore_params(splits_raw["train"])
-    train_prices_normalized = apply_price_zscore(splits_raw["train"], price_mean, price_std)
-    save_normalized_prices(train_prices_normalized)
 
+    for split in SPLITS:
+        splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
+
+    for split, df in splits_raw.items():
+        splits_ind = build_indicators(df.copy())
+        save_separate_indicator_files(splits_ind, split)
 
 if __name__ == "__main__":
     run()

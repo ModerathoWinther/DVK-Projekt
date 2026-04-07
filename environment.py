@@ -49,10 +49,7 @@ class Environment:
                         empty_trade = i * ENTRY_PER_TRADE
                         break
 
-                self.trades[empty_trade + ACTION_INDEX] = action.value
-                self.trades[empty_trade + PRICE_INDEX] = state[MARKET_CLOSE]
-                self.trades[empty_trade + SL_INDEX] = 0
-                self.trades[empty_trade + TP_INDEX] = 1065
+                self.__set_trade_info(empty_trade, action.value, state[MARKET_CLOSE], 0, 1065)
                 self.open_slots -= 1
                 return self.get_current_state()
 
@@ -68,6 +65,7 @@ class Environment:
             sum_reward += reward
             if closed:
                 self.__set_trade_info(trade, 0, 0, 0, 0)
+                self.open_slots += 1
 
         return sum_reward
 
@@ -90,7 +88,7 @@ class Environment:
     # todo Calculate reward using Sharpe ratio
     def __calculate_reward(self, high, low, trade):
         action, price, sl, tp = self.__get_trade_info(trade)
-        print(action, price, sl, tp)
+
         closed = False
         reward = 0
         match action:
@@ -108,7 +106,7 @@ class Environment:
                 if tp < high:
                     reward = tp - price
                     closed = True
-        print(reward, closed)
+
         return reward, closed
 
 

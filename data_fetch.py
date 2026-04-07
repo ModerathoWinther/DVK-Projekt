@@ -5,13 +5,18 @@ from datetime import datetime
 import time
 import os
 
+# Constant configuration
 TIMEFRAME = mt5.TIMEFRAME_M15
 SYMBOL = "XAUUSD"
 OUTPUT_DIR = "data/raw"
 TIMEZONE = pytz.timezone("Etc/UTC")
 DATE_FROM = datetime(2016, 1, 1, tzinfo=TIMEZONE)
 DATE_TO = datetime(2025, 12, 31, hour=23, tzinfo=TIMEZONE)
+FILE_NAME = f"data/raw/{SYMBOL}_{TIMEFRAME}M_{DATE_FROM.date()}_{DATE_TO.date()}.csv"
+SPLITS = ["train", "val", "test"]
+#
 
+# Downloads data via MetaTrader 5 and exports to .csv
 def fetch_and_save_data():
 
     if not mt5.initialize():
@@ -45,13 +50,12 @@ def fetch_and_save_data():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     actual_rows = len(final_df)
-    fn = f"data/raw/{SYMBOL}_{TIMEFRAME}M_{DATE_FROM.date()}_{DATE_TO.date()}.csv"
 
-    final_df.to_csv(fn, index=False)
-    print(f"Successfully saved {actual_rows} rows to {fn}")
+    final_df.to_csv(FILE_NAME, index=False)
+    print(f"Successfully saved {actual_rows} rows to {FILE_NAME}")
     print(f"Data range: {final_df['date'].min()} to {final_df['date'].max()}")
-    return fn
 
+# Parti
 def partition_fetched_data():
 
     if not os.path.isfile(FILE_NAME):
@@ -69,8 +73,7 @@ def partition_fetched_data():
     val_df   = df[(df['date'] > train_end) & (df['date'] <= val_end)].copy()
     test_df  = df[df['date'] > val_end].copy()
 
-    splits = ["train", "val", "test"]
-    for split in splits:
+    for split in SPLITS:
         dirs = os.path.join(OUTPUT_DIR, split)
         os.makedirs(dirs, exist_ok=True)
 
@@ -85,6 +88,14 @@ def partition_fetched_data():
     print(f"Saved splits to {OUTPUT_DIR}/X_path")
     return train_path, val_path, test_path
 
-if __name__ == "__main__":
-    FILE_NAME = fetch_and_save_data()
+def run():
+
+    if os.path.isfile(FILE_NAME):
+        print("Raw files already exist.")
+        return
+
+    fetch_and_save_data()
     partition_fetched_data()
+
+if __name__ == "__main__":
+    run()

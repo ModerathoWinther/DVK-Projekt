@@ -1,7 +1,12 @@
 import numpy
+from enum import Enum
 
 import init_state
 
+class action(Enum):
+    SELL = 1
+    HOLD = 2
+    BUY = 3
 
 class environment:
 
@@ -14,8 +19,19 @@ class environment:
         return numpy.concatenate([current_md, self.trades])
 
     def perform_action(self, action):
-        return
+        state = self.get_current_state()
+
+        match(action):
+            case action.HOLD:
+                self.index += 1
+                return self.get_current_state()
+            case action.SELL:
+                return self.get_current_state()
+            case action.BUY:
+                return self.get_current_state()
+
 
 if __name__ == "__main__":
     env = environment("test", 1, atr=True, macd=True, rsi=True)
     print(env.get_current_state())
+    print(env.perform_action(action.HOLD))

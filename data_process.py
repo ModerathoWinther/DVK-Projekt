@@ -1,12 +1,14 @@
 import os
+
 import pandas as pd
+
 import data_fetch
 import indicators as ind
 
 INPUT_DIR = data_fetch.OUTPUT_DIR
-OUTPUT_DIR  = "data/processed/indicators"
-SPLITS      = ["train", "val", "test"]
-SYMBOL      = "XAUUSD"
+OUTPUT_DIR = "data/processed/indicators"
+SPLITS = ["train", "val", "test"]
+SYMBOL = "XAUUSD"
 
 
 def load_split(split: str) -> pd.DataFrame:
@@ -46,7 +48,6 @@ def validate_ohlcv(df: pd.DataFrame, split: str) -> None:
 
 
 def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
-
     ind.macd(df)
     ind.atr(df)
     ind.rsi(df)
@@ -69,7 +70,6 @@ def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fit_normalization_params(df: pd.DataFrame) -> dict:
-
     indicator_cols = [c for c in df.columns if c != "date"]
     params = {}
     for col in indicator_cols:
@@ -78,7 +78,6 @@ def fit_normalization_params(df: pd.DataFrame) -> dict:
 
 
 def apply_normalization(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-
     normalized = df[["date"]].copy()
     indicator_cols = [c for c in df.columns if c != "date"]
     for col in indicator_cols:
@@ -110,17 +109,7 @@ def save_separate_indicator_files(df: pd.DataFrame, split: str) -> None:
         path = os.path.join(sep_dir, f"{col}.csv")
         df[["date", col]].to_csv(path, index=False)
 
-
-def save_merged_file(df: pd.DataFrame, split: str) -> str:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    path = os.path.join(f"{OUTPUT_DIR}", f"all_indicators_{split}_{SYMBOL}.csv")
-    df.to_csv(path, index=False)
-    print(f"    Merged normalized  → {path}  ({len(df)} rows)")
-    return path
-
-
 def run():
-
     splits_raw = {}
     for split in SPLITS:
         splits_raw[split] = load_split(split)
@@ -141,7 +130,7 @@ def run():
         print(f"  {split}:")
         normalized = apply_normalization(df, norm_params)
         save_separate_indicator_files(normalized, split)
-        save_merged_file(normalized, split)
+
 
 if __name__ == "__main__":
     run()

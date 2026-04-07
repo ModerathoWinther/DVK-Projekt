@@ -25,10 +25,11 @@ def get_market_data(split, atr=False, macd=False, rsi=False):
 
     return market_data.to_numpy()
 
-def init_trades(num_trades):
-    return numpy.zeros(num_trades * ENTRY_PER_TRADE)
+def init_trades(num_trades, entry_per_trade):
+    return numpy.zeros(num_trades * entry_per_trade)
 
-def run(split, num_trades, atr=False, macd=False, rsi=False):
+def run(split, num_trades, entry_per_trade, atr=False, macd=False, rsi=False):
     market_data = get_market_data(split, atr=atr, macd=macd, rsi=rsi)
-    trades = init_trades(num_trades)
+    trades = init_trades(num_trades, entry_per_trade)
     return market_data, trades
+

@@ -5,7 +5,7 @@ import data_process as dp
 
 PRICE_DIR = dp.INPUT_DIR
 INDICATOR_DIR = dp.OUTPUT_DIR
-ENTRY_PER_TRADE = 2
+
 
 def get_market_data(split, atr=False, macd=False, rsi=False):
     price = pd.read_csv(f"{PRICE_DIR}/{split}/raw_{split}.csv",

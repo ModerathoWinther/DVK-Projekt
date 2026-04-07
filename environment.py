@@ -7,6 +7,8 @@ import init_state
 ACTION_INDEX = 0
 PRICE_INDEX = 1
 
+ENTRY_PER_TRADE = 2
+
 
 class action(Enum):
     SELL = -1
@@ -17,7 +19,7 @@ class environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
         self.index = 0
-        self.market_data, self.trades = init_state.run(split, num_trades, atr=atr, macd=macd, rsi=rsi)
+        self.market_data, self.trades = init_state.run(split, num_trades, ENTRY_PER_TRADE, atr=atr, macd=macd, rsi=rsi)
 
     def get_current_state(self):
         current_md = self.market_data[self.index]

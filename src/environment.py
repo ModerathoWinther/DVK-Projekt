@@ -23,6 +23,11 @@ class Environment:
         self.open_slots = num_trades
         self.market_data, self.trades = init_state.run(split, num_trades, ENTRY_PER_TRADE, atr=atr, macd=macd, rsi=rsi)
 
+        # Sharpe ratio
+        self.initial_capital = 100_000.0
+        self.current_equity = self.initial_capital
+        self.equity_curve = [self.initial_capital]
+
     def get_current_state(self):
         current_md = self.market_data[self.index]
         return numpy.concatenate([current_md, self.trades])
@@ -34,6 +39,7 @@ class Environment:
         direction = action.direction
 
         if direction == Direction.HOLD:
+            self.equity_curve.append(self.current_equity)
             return self.get_current_state()
 
         if not self.can_trade():
@@ -51,7 +57,30 @@ class Environment:
 
         self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], sl, tp)
         self.open_slots -= 1
+
+        self.equity_curve.append(self.current_equity)
         return self.get_current_state()
+
+    def calculate_sharpe_ratio(self):
+
+        if len(self.equity_curve) < 2:
+            return 0.0
+
+        equity = numpy.array(self.equity_curve)
+        returns = numpy.diff(equity) / equity[:-1]
+
+        if len(returns) == 0 or numpy.std(returns) == 0:
+            return 0.0
+
+        mean_ret = numpy.mean(returns)
+        std_ret = numpy.std(returns)
+
+        # 252 trading days in year multiplied by 96 = number of bars/day with 15M time frame.
+        periods_per_year = 252 * 96
+        sharpe = (mean_ret - 0.0) / std_ret * numpy.sqrt(periods_per_year)
+        print(f"Sharpe ratio = {sharpe}")
+        return float(sharpe)
+
 
     def get_reward_and_clear_trades(self):
         current_md = self.market_data[self.index]
@@ -66,6 +95,9 @@ class Environment:
             if closed:
                 self.__set_trade_info(trade, 0, 0, 0, 0)
                 self.open_slots += 1
+
+        self.current_equity += sum_reward
+        self.equity_curve.append(self.current_equity)
 
         return sum_reward
 
@@ -116,7 +148,6 @@ class Environment:
                 empty_trade = i * ENTRY_PER_TRADE
                 break
         return empty_trade
-
 
 if __name__ == "__main__":
     env = Environment("train", 2)

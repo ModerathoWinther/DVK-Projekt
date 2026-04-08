@@ -61,27 +61,6 @@ class Environment:
         self.equity_curve.append(self.current_equity)
         return self.get_current_state()
 
-    def calculate_sharpe_ratio(self):
-
-        if len(self.equity_curve) < 2:
-            return 0.0
-
-        equity = numpy.array(self.equity_curve)
-        returns = numpy.diff(equity) / equity[:-1]
-
-        if len(returns) == 0 or numpy.std(returns) == 0:
-            return 0.0
-
-        mean_ret = numpy.mean(returns)
-        std_ret = numpy.std(returns)
-
-        # 252 trading days in year multiplied by 96 = number of bars/day with 15M time frame.
-        periods_per_year = 252 * 96
-        sharpe = (mean_ret - 0.0) / std_ret * numpy.sqrt(periods_per_year)
-        print(f"Sharpe ratio = {sharpe}")
-        return float(sharpe)
-
-
     def get_reward_and_clear_trades(self):
         current_md = self.market_data[self.index]
         high = current_md[MARKET_HIGH]
@@ -103,6 +82,25 @@ class Environment:
 
     def can_trade(self):
         return self.open_slots > 0
+
+    def __calculate_sharpe_ratio(self):
+
+        if len(self.equity_curve) < 2:
+            return 0.0
+
+        equity = numpy.array(self.equity_curve)
+        returns = numpy.diff(equity) / equity[:-1]
+
+        if len(returns) == 0 or numpy.std(returns) == 0:
+            return 0.0
+
+        mean_ret = numpy.mean(returns)
+        std_ret = numpy.std(returns)
+
+        # 252 trading days in year multiplied by 96 = number of bars/day with 15M time frame.
+        periods_per_year = 252 * 96
+        sharpe = (mean_ret - 0.0) / std_ret * numpy.sqrt(periods_per_year)
+        return float(sharpe)
 
     def __get_trade_info(self, start_index):
         action = self.trades[start_index + ACTION_INDEX]
@@ -161,6 +159,7 @@ if __name__ == "__main__":
     print("Reward:", env.get_reward_and_clear_trades())
     for i in range(100):
         env.perform_action(HOLD_ACTION)
+        print(f"Sharpe ratio = {env.calculate_sharpe_ratio()}")
         print(env.get_reward_and_clear_trades())
 
     # Should throw an Exception because too many trades

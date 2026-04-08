@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from random import random, randrange
 
 import numpy
@@ -13,6 +14,8 @@ EXPLORATION = 0.05
 LEARNING_RATE = 0.001
 DISCOUNT = 0.99
 
+TN_UPDATE_INTERVAL = 100
+
 optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
 loss_object = tf.keras.losses.MeanSquaredError()
 
@@ -24,6 +27,7 @@ class Transition:
     reward: float
     next_state: numpy.ndarray
 
+
 def build_model():
     return tf.keras.Sequential([
         tf.keras.layers.Input(shape=(NUM_INPUTS,)),
@@ -32,15 +36,16 @@ def build_model():
         tf.keras.layers.Dense(NUM_OUTPUTS)])
 
 
-def loss(model, x, y_true):
-    y_pred = model(x)
-    return loss_object(y_true=y_true, y_pred=y_pred)
+def loss(model, transition, target):
+    q_values = model(transition.state)
+    q = q_values[transition.action.index]
+    return loss_object(y_true=target, y_pred=q)
 
 
-# inputs = state, targets = true reward + future Q
-def grad(model, inputs, targets):
+def grad(model, transition):
+    target = transition.reward + DISCOUNT * tf.reduce_max(model(transition.next_state))
     with tf.GradientTape() as tape:
-        loss_value = loss(model, inputs, targets)
+        loss_value = loss(model, transition, target)
     return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
 
@@ -52,11 +57,12 @@ def train(atr=False, macd=False, rsi=False):
     counter = 0
 
     while env.has_next():
+        counter += 1
         state = env.get_current_state()
         if random() <= EXPLORATION:
             action_index = randrange(len(ACTION_SPACE))
         else:
-            action_index = q_network(state)
+            action_index = q_network(state).argmax()
 
         action = ACTION_SPACE[action_index]
         env.perform_action(action)
@@ -65,13 +71,9 @@ def train(atr=False, macd=False, rsi=False):
 
         replay_buffer.append(Transition(state, action, reward, new_state))
 
-        # todo sample random transition from replay buffer and apply gradient to q-network using target_network as reference
+        transition = replay_buffer[randrange(len(replay_buffer))]
+        loss_value, grads = grad(target_network, transition)
+        optimizer.apply_gradients(zip(grads, q_network.trainable_variables))
 
-        if counter % 100 == 0:
+        if counter % TN_UPDATE_INTERVAL == 0:
             target_network = q_network
-
-
-"""
-loss_value, grads = grad(target_network, state, reward)
-optimizer.apply_gradients(zip(grads, q_network.trainable_variables))
-"""

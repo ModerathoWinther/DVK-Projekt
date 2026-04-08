@@ -1,4 +1,4 @@
-from enum import Enum
+from action_space import Direction, Action, HOLD_ACTION, ACTION_SPACE
 
 import numpy
 
@@ -15,11 +15,6 @@ MARKET_LOW = 2
 MARKET_CLOSE = 3
 
 
-class Action(Enum):
-    SELL = -1
-    HOLD = 0
-    BUY = 1
-
 class Environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
@@ -32,29 +27,31 @@ class Environment:
         current_md = self.market_data[self.index]
         return numpy.concatenate([current_md, self.trades])
 
-    def perform_action(self, action):
+    def perform_action(self, action: Action):
         state = self.get_current_state()
         self.index += 1
 
-        match action:
-            case action.HOLD:
-                return self.get_current_state()
-            case _:
-                if not self.can_trade():
-                    raise Exception("No open slots")
+        direction = action.direction
 
-                empty_trade = -1
-                for i in range(self.num_trades):
-                    if self.trades[i * ENTRY_PER_TRADE] == 0:
-                        empty_trade = i * ENTRY_PER_TRADE
-                        break
+        if direction == Direction.HOLD:
+            return self.get_current_state()
 
-                self.trades[empty_trade + ACTION_INDEX] = action.value
-                self.trades[empty_trade + PRICE_INDEX] = state[MARKET_CLOSE]
-                self.trades[empty_trade + SL_INDEX] = 0
-                self.trades[empty_trade + TP_INDEX] = 1065
-                self.open_slots -= 1
-                return self.get_current_state()
+        if not self.can_trade():
+            raise Exception("No open slots")
+        empty_trade = self.__find_empty_trade()
+
+        price = state[MARKET_CLOSE]
+        tp, sl = 0, 0
+        if direction == Direction.BUY:
+            sl = price - price * action.sl
+            tp = price + price * action.tp
+        if direction == Direction.SELL:
+            sl = price + price * action.sl
+            tp = price - price * action.tp
+
+        self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], sl, tp)
+        self.open_slots -= 1
+        return self.get_current_state()
 
     def get_reward_and_clear_trades(self):
         current_md = self.market_data[self.index]
@@ -68,6 +65,7 @@ class Environment:
             sum_reward += reward
             if closed:
                 self.__set_trade_info(trade, 0, 0, 0, 0)
+                self.open_slots += 1
 
         return sum_reward
 
@@ -90,38 +88,49 @@ class Environment:
     # todo Calculate reward using Sharpe ratio
     def __calculate_reward(self, high, low, trade):
         action, price, sl, tp = self.__get_trade_info(trade)
-        print(action, price, sl, tp)
+
         closed = False
         reward = 0
         match action:
-            case Action.SELL.value:
-                if sl > high:
+            case Direction.SELL.value:
+                if sl < high:
                     reward = price - sl
                     closed = True
-                elif tp < low:
+                elif tp > low:
                     reward = price - tp
                     closed = True
-            case Action.BUY.value:
+            case Direction.BUY.value:
                 if sl > low:
                     reward = sl - price
                     closed = True
                 if tp < high:
                     reward = tp - price
                     closed = True
-        print(reward, closed)
+
         return reward, closed
+
+    def __find_empty_trade(self):
+        empty_trade = -1
+        for i in range(self.num_trades):
+            if self.trades[i * ENTRY_PER_TRADE] == 0:
+                empty_trade = i * ENTRY_PER_TRADE
+                break
+        return empty_trade
 
 
 if __name__ == "__main__":
     env = Environment("train", 2)
-    print("reward:  ", env.get_reward_and_clear_trades())
-    env.perform_action(Action.HOLD)
-    print("reward:  ", env.get_reward_and_clear_trades())
-    env.perform_action(Action.BUY)
-    print("reward:  ", env.get_reward_and_clear_trades())
-    for i in range(10):
-        env.perform_action(Action.HOLD)
-        print("reward:  ", env.get_reward_and_clear_trades())
+    print(env.get_current_state())
+    env.perform_action(HOLD_ACTION)
+    print(env.get_current_state())
+    env.perform_action(ACTION_SPACE[1])
+    print(env.get_current_state())
+    env.perform_action(HOLD_ACTION)
+    print(env.get_current_state())
+    print("Reward:", env.get_reward_and_clear_trades())
+    for i in range(100):
+        env.perform_action(HOLD_ACTION)
+        print(env.get_reward_and_clear_trades())
 
     # Should throw an Exception because too many trades
     # print(env.perform_action(Action.BUY))

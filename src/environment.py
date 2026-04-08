@@ -23,6 +23,11 @@ class Environment:
         self.open_slots = num_trades
         self.market_data, self.trades = init_state.run(split, num_trades, ENTRY_PER_TRADE, atr=atr, macd=macd, rsi=rsi)
 
+        # Sharpe ratio
+        self.initial_capital = 100_000.0
+        self.current_equity = self.initial_capital
+        self.equity_curve = [self.initial_capital]
+
     def get_current_state(self):
         current_md = self.market_data[self.index]
         return numpy.concatenate([current_md, self.trades])
@@ -52,6 +57,15 @@ class Environment:
         self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], sl, tp)
         self.open_slots -= 1
         return self.get_current_state()
+
+    def calculate_sharpe_ratio(self):
+        print("Calculating Sharpe ratio")
+        #todo calc periodic return (last 15 min)
+
+        #todo get equity from buy/sell actions
+
+
+
 
     def get_reward_and_clear_trades(self):
         current_md = self.market_data[self.index]
@@ -116,7 +130,6 @@ class Environment:
                 empty_trade = i * ENTRY_PER_TRADE
                 break
         return empty_trade
-
 
 if __name__ == "__main__":
     env = Environment("train", 2)

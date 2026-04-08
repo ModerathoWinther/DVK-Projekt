@@ -1,4 +1,4 @@
-from action_space import Direction, Action, ACTION_SPACE
+from action_space import Direction, Action, HOLD_ACTION, ACTION_SPACE
 
 import numpy
 
@@ -121,15 +121,15 @@ class Environment:
 if __name__ == "__main__":
     env = Environment("train", 2)
     print(env.get_current_state())
-    env.perform_action(ACTION_SPACE[0])
+    env.perform_action(HOLD_ACTION)
     print(env.get_current_state())
     env.perform_action(ACTION_SPACE[1])
     print(env.get_current_state())
-    env.perform_action(ACTION_SPACE[0])
+    env.perform_action(HOLD_ACTION)
     print(env.get_current_state())
     print("Reward:", env.get_reward_and_clear_trades())
     for i in range(100):
-        env.perform_action(ACTION_SPACE[0])
+        env.perform_action(HOLD_ACTION)
         print(env.get_reward_and_clear_trades())
 
     # Should throw an Exception because too many trades

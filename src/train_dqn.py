@@ -1,11 +1,13 @@
 from random import random, randrange
 
+import numpy
 import tensorflow as tf
 from environment import Environment
-from src.action_space import ACTION_SPACE
+from src.action_space import Action, ACTION_SPACE
 
-NUM_INPUTS = 4
-NUM_OUTPUTS = 7
+NUM_TRADES = 5
+NUM_INPUTS = 5 + NUM_TRADES * 4
+NUM_OUTPUTS = len(ACTION_SPACE)
 
 EXPLORATION = 0.05
 LEARNING_RATE = 0.001
@@ -14,6 +16,13 @@ DISCOUNT = 0.99
 optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
 loss_object = tf.keras.losses.MeanSquaredError()
 
+
+@dataclass
+class Transition:
+    state: numpy.ndarray
+    action: Action
+    reward: float
+    next_state: numpy.ndarray
 
 def build_model():
     return tf.keras.Sequential([
@@ -36,10 +45,11 @@ def grad(model, inputs, targets):
 
 
 def train(atr=False, macd=False, rsi=False):
-    env = Environment("train", 5, atr=atr, macd=macd, rsi=rsi)
+    env = Environment("train", NUM_TRADES, atr=atr, macd=macd, rsi=rsi)
     q_network = build_model()
     target_network = build_model()
     replay_buffer = []
+    counter = 0
 
     while env.has_next():
         state = env.get_current_state()
@@ -53,11 +63,12 @@ def train(atr=False, macd=False, rsi=False):
         reward = env.get_reward_and_clear_trades()
         new_state = env.get_current_state()
 
-        # todo store transition object in replay buffer
+        replay_buffer.append(Transition(state, action, reward, new_state))
 
         # todo sample random transition from replay buffer and apply gradient to q-network using target_network as reference
 
-        target_network = q_network
+        if counter % 100 == 0:
+            target_network = q_network
 
 
 """

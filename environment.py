@@ -1,4 +1,4 @@
-from enum import Enum
+from action_space import Direction, Action, ACTION_SPACE
 
 import numpy
 
@@ -15,11 +15,6 @@ MARKET_LOW = 2
 MARKET_CLOSE = 3
 
 
-class Action(Enum):
-    SELL = -1
-    HOLD = 0
-    BUY = 1
-
 class Environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
@@ -32,24 +27,21 @@ class Environment:
         current_md = self.market_data[self.index]
         return numpy.concatenate([current_md, self.trades])
 
-    def perform_action(self, action):
+    def perform_action(self, action: Action):
         state = self.get_current_state()
         self.index += 1
 
-        match action:
-            case action.HOLD:
+        direction = action.direction
+
+        match direction:
+            case Direction.HOLD:
                 return self.get_current_state()
             case _:
                 if not self.can_trade():
                     raise Exception("No open slots")
+                empty_trade = self.__find_empty_trade()
 
-                empty_trade = -1
-                for i in range(self.num_trades):
-                    if self.trades[i * ENTRY_PER_TRADE] == 0:
-                        empty_trade = i * ENTRY_PER_TRADE
-                        break
-
-                self.__set_trade_info(empty_trade, action.value, state[MARKET_CLOSE], 0, 1065)
+                self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], action.sl, action.tp)
                 self.open_slots -= 1
                 return self.get_current_state()
 
@@ -92,14 +84,14 @@ class Environment:
         closed = False
         reward = 0
         match action:
-            case Action.SELL.value:
+            case Direction.SELL.value:
                 if sl > high:
                     reward = price - sl
                     closed = True
                 elif tp < low:
                     reward = price - tp
                     closed = True
-            case Action.BUY.value:
+            case Direction.BUY.value:
                 if sl > low:
                     reward = sl - price
                     closed = True
@@ -109,17 +101,22 @@ class Environment:
 
         return reward, closed
 
+    def __find_empty_trade(self):
+        empty_trade = -1
+        for i in range(self.num_trades):
+            if self.trades[i * ENTRY_PER_TRADE] == 0:
+                empty_trade = i * ENTRY_PER_TRADE
+                break
+        return empty_trade
+
 
 if __name__ == "__main__":
     env = Environment("train", 2)
-    print("reward:  ", env.get_reward_and_clear_trades())
-    env.perform_action(Action.HOLD)
-    print("reward:  ", env.get_reward_and_clear_trades())
-    env.perform_action(Action.BUY)
-    print("reward:  ", env.get_reward_and_clear_trades())
-    for i in range(10):
-        env.perform_action(Action.HOLD)
-        print("reward:  ", env.get_reward_and_clear_trades())
+    print(env.get_current_state())
+    env.perform_action(ACTION_SPACE[0])
+    print(env.get_current_state())
+    env.perform_action(ACTION_SPACE[1])
+    print(env.get_current_state())
 
     # Should throw an Exception because too many trades
     # print(env.perform_action(Action.BUY))

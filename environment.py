@@ -33,17 +33,25 @@ class Environment:
 
         direction = action.direction
 
-        match direction:
-            case Direction.HOLD:
-                return self.get_current_state()
-            case _:
-                if not self.can_trade():
-                    raise Exception("No open slots")
-                empty_trade = self.__find_empty_trade()
+        if direction == Direction.HOLD:
+            return self.get_current_state()
 
-                self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], action.sl, action.tp)
-                self.open_slots -= 1
-                return self.get_current_state()
+        if not self.can_trade():
+            raise Exception("No open slots")
+        empty_trade = self.__find_empty_trade()
+
+        price = state[MARKET_CLOSE]
+        tp, sl = 0, 0
+        if direction == Direction.BUY:
+            sl = price - price * action.sl
+            tp = price + price * action.tp
+        if direction == Direction.SELL:
+            sl = price + price * action.sl
+            tp = price - price * action.tp
+
+        self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], sl, tp)
+        self.open_slots -= 1
+        return self.get_current_state()
 
     def get_reward_and_clear_trades(self):
         current_md = self.market_data[self.index]
@@ -117,6 +125,12 @@ if __name__ == "__main__":
     print(env.get_current_state())
     env.perform_action(ACTION_SPACE[1])
     print(env.get_current_state())
+    env.perform_action(ACTION_SPACE[0])
+    print(env.get_current_state())
+    print("Reward:", env.get_reward_and_clear_trades())
+    for i in range(100):
+        env.perform_action(ACTION_SPACE[0])
+        print(env.get_reward_and_clear_trades())
 
     # Should throw an Exception because too many trades
     # print(env.perform_action(Action.BUY))

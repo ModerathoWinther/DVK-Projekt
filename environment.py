@@ -93,10 +93,10 @@ class Environment:
         reward = 0
         match action:
             case Direction.SELL.value:
-                if sl > high:
+                if sl < high:
                     reward = price - sl
                     closed = True
-                elif tp < low:
+                elif tp > low:
                     reward = price - tp
                     closed = True
             case Direction.BUY.value:

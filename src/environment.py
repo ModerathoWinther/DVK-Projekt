@@ -39,6 +39,7 @@ class Environment:
         direction = action.direction
 
         if direction == Direction.HOLD:
+            self.equity_curve.append(self.current_equity)
             return self.get_current_state()
 
         if not self.can_trade():
@@ -56,15 +57,29 @@ class Environment:
 
         self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], sl, tp)
         self.open_slots -= 1
+
+        self.equity_curve.append(self.current_equity)
         return self.get_current_state()
 
     def calculate_sharpe_ratio(self):
-        print("Calculating Sharpe ratio")
-        #todo calc periodic return (last 15 min)
 
-        #todo get equity from buy/sell actions
+        if len(self.equity_curve) < 2:
+            return 0.0
 
+        equity = numpy.array(self.equity_curve)
+        returns = numpy.diff(equity) / equity[:-1]
 
+        if len(returns) == 0 or numpy.std(returns) == 0:
+            return 0.0
+
+        mean_ret = numpy.mean(returns)
+        std_ret = numpy.std(returns)
+
+        # 252 trading days in year multiplied by 96 = number of bars/day with 15M time frame.
+        periods_per_year = 252 * 96
+        sharpe = (mean_ret - 0.0) / std_ret * numpy.sqrt(periods_per_year)
+        print(f"Sharpe ratio = {sharpe}")
+        return float(sharpe)
 
 
     def get_reward_and_clear_trades(self):
@@ -80,6 +95,9 @@ class Environment:
             if closed:
                 self.__set_trade_info(trade, 0, 0, 0, 0)
                 self.open_slots += 1
+
+        self.current_equity += sum_reward
+        self.equity_curve.append(self.current_equity)
 
         return sum_reward
 

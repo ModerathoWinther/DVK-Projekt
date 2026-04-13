@@ -1,1 +1,11 @@
-g
+midas-dqn-1:
+  learning_rate_a: 0.001
+  epsilon_init:
+  epsilon_decay: 0.99
+  epsilon_min: 0.05
+  discount_factor_g: 0.99
+  fc1_nodes: 512
+  replay_memory_size: 100000
+  net_sync_rate: 10
+  mini_batch_size: 32
+  stop_on_reward: 99999999

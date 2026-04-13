@@ -1,3 +1,6 @@
 metatrader5~=5.0.5640
 pandas~=2.2.3
 pytz~=2026.1.post1
+numpy~=2.2.6
+tensorflow~=2.21.0
+pytest~=9.0.2

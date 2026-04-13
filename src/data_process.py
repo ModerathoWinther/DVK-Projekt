@@ -6,10 +6,10 @@ import data_fetch
 import indicators as ind
 
 INPUT_DIR = data_fetch.OUTPUT_DIR
-OUTPUT_DIR = "data/processed/indicators"
-SPLITS = ["train", "val", "test"]
+OUTPUT_DIR = "../data/processed/indicators"
+DATASET_SPLITS = ["train", "val", "test"]
 SYMBOL = "XAUUSD"
-NORMALIZED_OUTPUT = "data/processed/normalized/train.csv"
+NORMALIZED_OUTPUT = "./data/processed/normalized/train.csv"
 
 
 def load_split(split: str) -> pd.DataFrame:
@@ -137,7 +137,7 @@ def save_normalized_prices(df: pd.DataFrame) -> None:
 
 def run():
     splits_raw = {}
-    for split in SPLITS:
+    for split in DATASET_SPLITS:
         splits_raw[split] = load_split(split)
 
     for split, df in splits_raw.items():
@@ -145,7 +145,7 @@ def run():
 
     price_mean, price_std = compute_price_zscore_params(splits_raw["train"])
 
-    for split in SPLITS:
+    for split in DATASET_SPLITS:
         splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
 
     for split, df in splits_raw.items():

@@ -1,14 +1,16 @@
+import os.path
+
 import numpy
 import pandas as pd
 
 import data_process as dp
 
-PRICE_DIR = dp.INPUT_DIR
+PRICE_DIR = dp.NORMALIZED_OUTPUT
 INDICATOR_DIR = dp.OUTPUT_DIR
 
 
 def get_market_data(split, atr=False, macd=False, rsi=False):
-    price = pd.read_csv(f"{PRICE_DIR}/{split}/raw_{split}.csv",
+    price = pd.read_csv(PRICE_DIR,
                      index_col="date", parse_dates=["date"])
 
     frames = [price]

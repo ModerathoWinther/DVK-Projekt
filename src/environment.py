@@ -1,7 +1,6 @@
 from action_space import Direction, Action, HOLD_ACTION, ACTION_SPACE
 
 import numpy
-
 import init_state
 
 ENTRY_PER_TRADE = 4
@@ -131,9 +130,11 @@ class Environment:
                     closed = True
             case Direction.BUY.value:
                 if sl > low:
+                    # sl - price när SL är högre än BUY-low ger ju ex. 1000 - 1020 = -20 reward
                     reward = sl - price
                     closed = True
-                if tp < high:
+                # if gör att båda kan aktivera, elif gör den exclusive
+                elif tp < high:
                     reward = tp - price
                     closed = True
 
@@ -162,7 +163,6 @@ if __name__ == "__main__":
     print("Reward:", env.get_reward_and_clear_trades())
     for i in range(100):
         env.perform_action(HOLD_ACTION)
-        print(f"Sharpe ratio = {env.calculate_sharpe_ratio()}")
         print(env.get_reward_and_clear_trades())
 
     # Should throw an Exception because too many trades

@@ -16,6 +16,10 @@ FILE_NAME = f"data/raw/{SYMBOL}_{TIMEFRAME}M_{DATE_FROM.date()}_{DATE_TO.date()}
 SPLITS = ["train", "val", "test"]
 #
 
+# Change to ROOT dir
+os.chdir("..")
+
+
 # Downloads data via MetaTrader 5 and exports to .csv
 def fetch_and_save_data():
 

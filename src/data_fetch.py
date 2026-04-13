@@ -8,7 +8,7 @@ import os
 # Constant configuration
 TIMEFRAME = mt5.TIMEFRAME_M15
 SYMBOL = "XAUUSD"
-OUTPUT_DIR = "data/raw"
+OUTPUT_DIR = "../data/raw"
 TIMEZONE = pytz.timezone("Etc/UTC")
 DATE_FROM = datetime(2016, 1, 1, tzinfo=TIMEZONE)
 DATE_TO = datetime(2025, 12, 31, hour=23, tzinfo=TIMEZONE)

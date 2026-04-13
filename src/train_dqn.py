@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from random import random, randrange
 
+import yaml
 import numpy
 import tensorflow as tf
 from environment import Environment
@@ -26,7 +27,6 @@ class Transition:
     action: Action
     reward: float
     next_state: numpy.ndarray
-
 
 def build_model():
     return tf.keras.Sequential([

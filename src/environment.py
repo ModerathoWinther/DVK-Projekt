@@ -76,7 +76,7 @@ class Environment:
 
         self.current_equity += sum_reward
         self.equity_curve.append(self.current_equity)
-
+        print(f"Sharpe ratio = {self.__calculate_sharpe_ratio()}")
         return sum_reward
 
     def can_trade(self):

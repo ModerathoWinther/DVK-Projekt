@@ -59,6 +59,7 @@ def train(atr=False, macd=False, rsi=False):
     while env.has_next():
         counter += 1
         state = env.get_current_state()
+        state = state.reshape((1,-1))
         if random() <= EXPLORATION:
             action_index = randrange(len(ACTION_SPACE))
         else:
@@ -73,7 +74,11 @@ def train(atr=False, macd=False, rsi=False):
 
         transition = replay_buffer[randrange(len(replay_buffer))]
         loss_value, grads = grad(target_network, transition)
+        print(loss_value)
         optimizer.apply_gradients(zip(grads, q_network.trainable_variables))
 
         if counter % TN_UPDATE_INTERVAL == 0:
             target_network = q_network
+
+if __name__ == '__main__':
+    train(atr=False, macd=False, rsi=False)

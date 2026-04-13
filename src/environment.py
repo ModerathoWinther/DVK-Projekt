@@ -149,6 +149,9 @@ class Environment:
                 break
         return empty_trade
 
+    def has_next(self):
+        return self.index < len(self.market_data) - 1
+
 if __name__ == "__main__":
     env = Environment("train", 2)
     print(env.get_current_state())

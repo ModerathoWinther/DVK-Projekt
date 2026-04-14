@@ -179,6 +179,50 @@ class BackTestEnvironment:
         self.num_gain = 0
         self.num_loss = 0
 
+    def get_current_state(self):
+        return self.env.get_current_state()
+
+    def perform_action(self, action):
+        env = self.env
+
+        env.perform_action(action)
+
+        high, low = env.__get_high_low()
+
+        for i in range(env.num_trades):
+            action, price, sl, tp = env.__get_trade_info(i)
+
+            to_clear = []
+            match action:
+                case Direction.SELL.value:
+                    if sl < high:
+                        loss = price - sl
+                        self.total_profit += loss
+                        self.total_loss -= loss
+                        self.num_loss += 1
+                        to_clear.append(action)
+                    elif tp > low:
+                        gain = price - tp
+                        self.total_profit += gain
+                        self.total_gain += gain
+                        self.num_gain += 1
+                        to_clear.append(action)
+                case Direction.BUY.value:
+                    if sl > low:
+                        loss = sl - price
+                        self.total_profit += loss
+                        self.total_loss -= loss
+                        self.num_loss = sl - price
+                        to_clear.append(action)
+                    elif tp < high:
+                        gain = tp - price
+                        self.total_profit += gain
+                        self.total_gain += gain
+                        self.num_gain += 1
+                        to_clear.append(action)
+
+            env.__clear(to_clear)
+            
 
 if __name__ == "__main__":
     env = Environment("train", 2)

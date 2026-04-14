@@ -82,6 +82,31 @@ class Environment:
     def can_trade(self):
         return self.open_slots > 0
 
+    def has_next(self):
+        return self.index < len(self.market_data) - 1
+
+
+    def __get_trade_info(self, start_index):
+        action = self.trades[start_index + ACTION_INDEX]
+        price = self.trades[start_index + PRICE_INDEX]
+        sl = self.trades[start_index + SL_INDEX]
+        tp = self.trades[start_index + TP_INDEX]
+        return action, price, sl, tp
+
+    def __set_trade_info(self, start_index, action, price, sl, tp):
+        self.trades[start_index + ACTION_INDEX] = action
+        self.trades[start_index + PRICE_INDEX] = price
+        self.trades[start_index + SL_INDEX] = sl
+        self.trades[start_index + TP_INDEX] = tp
+
+    def __find_empty_trade(self):
+        empty_trade = -1
+        for i in range(self.num_trades):
+            if self.trades[i * ENTRY_PER_TRADE] == 0:
+                empty_trade = i * ENTRY_PER_TRADE
+                break
+        return empty_trade
+
     def __calculate_sharpe_ratio(self):
 
         if len(self.equity_curve) < 2:
@@ -101,20 +126,6 @@ class Environment:
         sharpe = (mean_ret - 0.0) / std_ret * numpy.sqrt(periods_per_year)
         return float(sharpe)
 
-    def __get_trade_info(self, start_index):
-        action = self.trades[start_index + ACTION_INDEX]
-        price = self.trades[start_index + PRICE_INDEX]
-        sl = self.trades[start_index + SL_INDEX]
-        tp = self.trades[start_index + TP_INDEX]
-        return action, price, sl, tp
-
-    def __set_trade_info(self, start_index, action, price, sl, tp):
-        self.trades[start_index + ACTION_INDEX] = action
-        self.trades[start_index + PRICE_INDEX] = price
-        self.trades[start_index + SL_INDEX] = sl
-        self.trades[start_index + TP_INDEX] = tp
-
-    # todo Calculate reward using Sharpe ratio
     def __calculate_reward(self, high, low, trade):
         action, price, sl, tp = self.__get_trade_info(trade)
 
@@ -140,16 +151,19 @@ class Environment:
 
         return reward, closed
 
-    def __find_empty_trade(self):
-        empty_trade = -1
-        for i in range(self.num_trades):
-            if self.trades[i * ENTRY_PER_TRADE] == 0:
-                empty_trade = i * ENTRY_PER_TRADE
-                break
-        return empty_trade
 
-    def has_next(self):
-        return self.index < len(self.market_data) - 1
+class BackTestEnvironment(Environment):
+
+    def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
+        super().__init__(split, num_trades, atr, macd, rsi)
+
+        self.closed_trades = 0
+        self.total_profit = 0
+        self.total_gain = 0
+        self.total_loss = 0
+        self.num_gain = 0
+        self.num_loss = 0
+
 
 if __name__ == "__main__":
     env = Environment("train", 2)

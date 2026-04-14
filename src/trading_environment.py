@@ -1,12 +1,11 @@
-import gymnasium as gym
-from gymnasium import spaces
-import numpy as np
-from action_space import Direction, Action, HOLD_ACTION, ACTION_SPACE
 from collections import deque
 
-import init_state
+import gymnasium as gym
+import numpy as np
+from gymnasium import spaces
 
-N_PRICE_ATTR = 3
+import init_state
+from action_space import Direction, ACTION_SPACE
 
 class TradingEnvironment(gym.Env):
 
@@ -23,16 +22,23 @@ class TradingEnvironment(gym.Env):
 
         self.market_data = init_state.run(**params)
         col = 0
-        self.col_open = col; col += 1
-        self.col_high = col; col += 1
-        self.col_low = col; col += 1
-        self.col_close = col; col += 1
+        self.col_open = col;
+        col += 1
+        self.col_high = col;
+        col += 1
+        self.col_low = col;
+        col += 1
+        self.col_close = col;
+        col += 1
         if self.atr:
-            self.col_atr = col; col += 1
+            self.col_atr = col;
+            col += 1
         if self.macd:
-            self.col_macd = col; col += 3
+            self.col_macd = col;
+            col += 3
         if self.rsi:
-            self.col_rsi = col; col += 1
+            self.col_rsi = col;
+            col += 1
 
         self._recent_returns = deque(maxlen=96)
         self.current_step = 0
@@ -50,7 +56,7 @@ class TradingEnvironment(gym.Env):
             dtype=np.float32
         )
 
-        self.action_space = spaces.Discrete(3)
+        self.action_space = spaces.Discrete(len(ACTION_SPACE))
 
         self.SL_ATR_MULT = 1.5
         self.TP_ATR_MULT = 3.0
@@ -71,18 +77,18 @@ class TradingEnvironment(gym.Env):
 
         realized_pnl, _ = self._process_trades(high, low)
 
-        if action == 1 or action == 2:
-            if self.open_slots > 0:
-                price = close
-                atr = current_md[self.col_atr]
-                direction = Direction.BUY if action == 1 else Direction.SELL
-                sl = price - direction.value * self.SL_ATR_MULT * atr
-                tp = price + direction.value * self.TP_ATR_MULT * atr
-                for i in range(self.num_trades):
-                    if self.trades[i, 0] == 0:
-                        self.trades[i] = [direction.value, price, sl, tp]
-                        self.open_slots -= 1
-                        break
+        act = ACTION_SPACE[action]
+
+        if act.direction != Direction.HOLD and self.open_slots > 0:
+            price = close
+            atr = current_md[self.col_atr]
+            sl = price - act.direction.value * self.SL_ATR_MULT * atr
+            tp = price + act.direction.value * self.TP_ATR_MULT * atr
+            for i in range(self.num_trades):
+                if self.trades[i, 0] == 0:
+                    self.trades[i] = [act.direction.value, price, sl, tp]
+                    self.open_slots -= 1
+                    break
 
         sharpe_shaped = self._sharpe_reward(realized_pnl)
         reward = sharpe_shaped
@@ -92,12 +98,11 @@ class TradingEnvironment(gym.Env):
         self.current_step += 1
         terminated = self.current_step >= self.max_steps
 
-        return self._get_observation(), reward, terminated, False, {}
+        return self._get_observation(), sharpe_shaped, terminated, False, {}
 
     def _process_trades(self, high: float, low: float) -> tuple[float, int]:
         total_reward = 0.0
         closed = 0
-
         for i in range(self.num_trades):
             if self.trades[i, 0] == 0:
                 continue
@@ -124,8 +129,10 @@ class TradingEnvironment(gym.Env):
         std = np.std(self._recent_returns)
         if std < 1e-8:
             return 0.0
-        return pnl / std
-    
+        shaped = pnl / std
+
+        return shaped
+
     def _unrealized_pnl(self, current_price: float) -> float:
         total = 0.0
         for i in range(self.num_trades):
@@ -151,7 +158,7 @@ class TradingEnvironment(gym.Env):
 
         mean_ret = np.mean(returns)
         std_ret = np.std(returns)
-        periods_per_year = 252 * 96   # 15-minute bars, Trading days * 24h * 4 bars/h
+        periods_per_year = 252 * 96  # 15-minute bars, Trading days * 24h * 4 bars/h
 
         sharpe = (mean_ret - 0.0) / std_ret * np.sqrt(periods_per_year)
         return float(sharpe)

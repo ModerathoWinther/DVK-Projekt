@@ -11,6 +11,9 @@ def get_market_data(split, atr=False, macd=False, rsi=False):
     price = pd.read_csv(PRICE_DIR,
                      index_col="date", parse_dates=["date"])
 
+    price = price.drop(columns=['volume'])
+
+    print(f'price.columns = {price.columns}')
     frames = [price]
     if atr:
         frames.append(pd.read_csv(f"{INDICATOR_DIR}/{split}/atr.csv",
@@ -22,6 +25,7 @@ def get_market_data(split, atr=False, macd=False, rsi=False):
         frames.append(pd.read_csv(f"{INDICATOR_DIR}/{split}/rsi.csv",
                                   index_col="date", parse_dates=["date"]))
     market_data = pd.concat(frames, axis=1).dropna()
+    print(f'market_data.columns = {market_data.columns}')
 
     return market_data.to_numpy()
 

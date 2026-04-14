@@ -2,7 +2,6 @@ import os
 
 from action_space import ACTION_SPACE
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-os.makedirs('results', exist_ok=True)
 
 import argparse
 import itertools
@@ -47,8 +46,6 @@ class TradingAgent:
         self.fc1_nodes = hyperparameters['fc1_nodes']
         self.indicator_columns = 0
         self.parameters = hyperparameters['env_make_params']
-
-
 
         self.enable_double_dqn = hyperparameters['enable_double_dqn']
         self.enable_dueling_dqn = hyperparameters['enable_dueling_dqn']
@@ -117,7 +114,7 @@ class TradingAgent:
             while not terminated and episode_reward < self.stop_on_reward:
 
                 if is_training and random.random() < epsilon:
-                    action = random.randrange(3)
+                    action = random.randrange(len(ACTION_SPACE))
                     action = torch.tensor(action, dtype=torch.int64, device=DEVICE)
                 else:
                     with torch.no_grad():
@@ -133,6 +130,10 @@ class TradingAgent:
                 if is_training:
                     memory.append((state, action, new_state, reward, terminated))
                     step_count += 1
+                    # Decay epsilon after each step if memory is large enough.
+                    if len(memory) > self.mini_batch_size:
+                        epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)
+                        epsilon_tracker.append(epsilon)
 
                 state = new_state
 
@@ -180,11 +181,6 @@ class TradingAgent:
                     mini_batch = memory.sample(self.mini_batch_size)
                     self.optimize(mini_batch, policy_dqn, target_dqn)
 
-                    # Decay epsilon
-                    epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)
-                    epsilon_tracker.append(epsilon)
-
-
                     # Copy policy network to target network after a certain number of steps
                     if step_count > self.network_sync_rate:
                         target_dqn.load_state_dict(policy_dqn.state_dict())
@@ -210,10 +206,6 @@ class TradingAgent:
         plt.ylabel('Epsilon Decay')
         plt.plot(epsilon_history)
 
-
-
-
-
         plt.subplots_adjust(wspace=1.0, hspace=1.0)
 
         # Save plots
@@ -234,12 +226,12 @@ class TradingAgent:
             if self.enable_double_dqn:
                 best_actions = policy_dqn(new_states).argmax(dim=1)
                 target_q = rewards + (1 - terminations) * self.discount_factor_g * \
-                           target_dqn(new_states).gather(1, best_actions.unsqueeze(1)).squeeze()
+                           target_dqn(new_states).gather(1, best_actions.unsqueeze(1)).squeeze(1)
             else:
                 target_q = rewards + (1 - terminations) * self.discount_factor_g * \
                            target_dqn(new_states).max(dim=1)[0]
 
-        current_q = policy_dqn(states).gather(1, actions.unsqueeze(1)).squeeze()
+        current_q = policy_dqn(states).gather(1, actions.unsqueeze(1)).squeeze(1)
 
         loss = self.loss_fn(current_q, target_q)
         self.optimizer.zero_grad()

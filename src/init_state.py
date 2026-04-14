@@ -11,8 +11,6 @@ def get_market_data(split, atr=False, macd=False, rsi=False):
     price = pd.read_csv(PRICE_DIR,
                      index_col="date", parse_dates=["date"])
 
-    price = price.drop(columns=['volume'])
-
     print(f'price.columns = {price.columns}')
     frames = [price]
     if atr:

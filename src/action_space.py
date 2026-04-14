@@ -24,5 +24,5 @@ HOLD_ACTION = Action(Direction.HOLD, None, None, 0)
 i = 1
 ACTION_SPACE = [HOLD_ACTION]
 for direction, sl, tp in product([Direction.BUY, Direction.SELL], SL_LEVELS, TP_LEVELS):
-    ACTION_SPACE.append(Action(Direction.SELL, sl, tp, i))
+    ACTION_SPACE.append(Action(direction, sl, tp, i))
     i += 1

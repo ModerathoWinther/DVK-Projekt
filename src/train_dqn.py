@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from random import random, randrange
 
@@ -20,6 +21,7 @@ TN_UPDATE_INTERVAL = 100
 optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
 loss_object = tf.keras.losses.MeanSquaredError()
 
+os.makedirs('result', exist_ok=True)
 
 @dataclass
 class Transition:

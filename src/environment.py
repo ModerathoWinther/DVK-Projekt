@@ -2,6 +2,7 @@ from action_space import Direction, Action, HOLD_ACTION, ACTION_SPACE
 
 import numpy
 import init_state
+import yaml
 
 ENTRY_PER_TRADE = 4
 ACTION_INDEX = 0
@@ -17,6 +18,11 @@ MARKET_CLOSE = 3
 class Environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
+        with open('hyperparameters.yml', 'r') as file:
+            all_hyperparameter = yaml.safe_load(file)
+            hyperparameters = all_hyperparameter['midas-dqn-1']
+
+
         self.index = 0
         self.num_trades = num_trades
         self.open_slots = num_trades

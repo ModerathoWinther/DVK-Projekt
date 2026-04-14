@@ -1,8 +1,6 @@
 import os
-
 from action_space import ACTION_SPACE
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-
 import argparse
 import itertools
 import random
@@ -12,12 +10,9 @@ import numpy as np
 import torch
 import yaml
 from torch import nn
-
 from dqn import DQN
 from experience_replay import ReplayMemory
 from trading_environment import TradingEnvironment
-
-
 
 DATE_FORMAT = "%y-%m-%d %H:%M:%S"
 RESULTS_DIR = 'results'
@@ -58,7 +53,7 @@ class TradingAgent:
         self.GRAPH_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.png')
 
     def run(self, is_training=True):
-
+        episode_steps = 0
         if is_training:
             start_time = datetime.now()
             last_graph_update_time = start_time
@@ -157,7 +152,7 @@ class TradingAgent:
 
                 if episode_reward > best_reward:
                     log_message = (
-                        f"{datetime.now().strftime(DATE_FORMAT)} | Episode {episode} | "
+                        f"{datetime.now().strftime(DATE_FORMAT)}  | Episode {episode} | "
                         f"Reward: {episode_reward:.2f} | "
                         f"Equity diff: {env.current_equity - env.initial_capital:.2f} | "
                         f"Sharpe: {episode_sharpe:.3f} | "
@@ -183,41 +178,50 @@ class TradingAgent:
 
                     # Copy policy network to target network after a certain number of steps
                     if step_count > self.network_sync_rate:
+                        episode_steps = step_count
                         target_dqn.load_state_dict(policy_dqn.state_dict())
                         step_count = 0
+            print(f"{datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  n steps: {episode_steps}  |  STATUS = Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe: 3f}  |  (episode reward: {episode_reward:.1f})  |  equity diff: {env.initial_capital - env.current_equity}")
+            episode_steps = 0
 
     def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode):
-        # Save plots
-        fig = plt.figure(1)
+        # Create the figure with a larger width to accommodate 3 plots
+        fig = plt.figure(figsize=(15, 5))
 
-        # Plot average rewards (Y-axis) vs episodes (X-axis)
+        # Calculate Moving Averages
         mean_rewards = np.zeros(len(rewards_per_episode))
         mean_sharpe = np.zeros(len(sharpe_per_episode))
+
         for x in range(len(mean_rewards)):
             mean_rewards[x] = np.mean(rewards_per_episode[max(0, x - 99):(x + 1)])
         for x in range(len(mean_sharpe)):
-            mean_sharpe[x] = np.mean(sharpe_per_episode[max(0, x -99):(x + 1)])
+            mean_sharpe[x] = np.mean(sharpe_per_episode[max(0, x - 99):(x + 1)])
 
-        plt.subplot(121)
-        plt.ylabel('Mean Rewards')
-        plt.plot(mean_rewards)
+        plt.subplot(131)
+        plt.ylabel('Mean Rewards (100-ep MA)')
+        plt.xlabel('Episodes')
+        plt.plot(mean_rewards, color='blue')
 
-        plt.subplot(122)
+        plt.subplot(132)
         plt.ylabel('Epsilon Decay')
-        plt.plot(epsilon_history)
+        plt.xlabel('Episodes')
+        plt.plot(epsilon_history, color='orange')
 
-        plt.subplots_adjust(wspace=1.0, hspace=1.0)
+        plt.subplot(133)
+        plt.ylabel('Mean Sharpe Ratio (100-ep MA)')
+        plt.xlabel('Episodes')
+        plt.plot(mean_sharpe, color='green')
 
-        # Save plots
+        plt.tight_layout()
+
         fig.savefig(self.GRAPH_FILE)
         plt.close(fig)
 
-    # Optimize policy network
     def optimize(self, mini_batch, policy_dqn, target_dqn):
         states, actions, new_states, rewards, terminations = zip(*mini_batch)
 
         states = torch.stack(states)
-        actions = torch.stack(actions)  # action indices, not Action objects
+        actions = torch.stack(actions)
         new_states = torch.stack(new_states)
         rewards = torch.stack(rewards)
         terminations = torch.tensor(terminations).float()

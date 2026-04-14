@@ -15,6 +15,17 @@ MARKET_LOW = 2
 MARKET_CLOSE = 3
 
 
+def set_sl_tp(price, action):
+    tp, sl = 0, 0
+    if action.direction == Direction.BUY:
+        sl = price - price * action.sl
+        tp = price + price * action.tp
+    if action.direction == Direction.SELL:
+        sl = price + price * action.sl
+        tp = price - price * action.tp
+    return sl, tp
+
+
 class Environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
@@ -52,13 +63,7 @@ class Environment:
         empty_trade = self.__find_empty_trade()
 
         price = state[MARKET_CLOSE]
-        tp, sl = 0, 0
-        if direction == Direction.BUY:
-            sl = price - price * action.sl
-            tp = price + price * action.tp
-        if direction == Direction.SELL:
-            sl = price + price * action.sl
-            tp = price - price * action.tp
+        sl, tp = set_sl_tp(price, action)
 
         self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], sl, tp)
         self.open_slots -= 1
@@ -67,18 +72,18 @@ class Environment:
         return self.get_current_state()
 
     def get_reward_and_clear_trades(self):
-        current_md = self.market_data[self.index]
-        high = current_md[MARKET_HIGH]
-        low = current_md[MARKET_LOW]
+        high, low = self.__get_high_low()
 
         sum_reward = 0
+        to_clear = []
         for i in range(self.num_trades):
             trade = i * ENTRY_PER_TRADE
             reward, closed = self.__calculate_reward(high, low, trade)
             sum_reward += reward
             if closed:
-                self.__set_trade_info(trade, 0, 0, 0, 0)
-                self.open_slots += 1
+                to_clear.append(trade)
+
+        self.__clear(to_clear)
 
         self.current_equity += sum_reward
         self.equity_curve.append(self.current_equity)
@@ -87,6 +92,31 @@ class Environment:
 
     def can_trade(self):
         return self.open_slots > 0
+
+    def has_next(self):
+        return self.index < len(self.market_data) - 1
+
+
+    def __get_trade_info(self, start_index):
+        action = self.trades[start_index + ACTION_INDEX]
+        price = self.trades[start_index + PRICE_INDEX]
+        sl = self.trades[start_index + SL_INDEX]
+        tp = self.trades[start_index + TP_INDEX]
+        return action, price, sl, tp
+
+    def __set_trade_info(self, start_index, action, price, sl, tp):
+        self.trades[start_index + ACTION_INDEX] = action
+        self.trades[start_index + PRICE_INDEX] = price
+        self.trades[start_index + SL_INDEX] = sl
+        self.trades[start_index + TP_INDEX] = tp
+
+    def __find_empty_trade(self):
+        empty_trade = -1
+        for i in range(self.num_trades):
+            if self.trades[i * ENTRY_PER_TRADE] == 0:
+                empty_trade = i * ENTRY_PER_TRADE
+                break
+        return empty_trade
 
     def __calculate_sharpe_ratio(self):
 
@@ -106,19 +136,6 @@ class Environment:
         periods_per_year = 252 * 96
         sharpe = (mean_ret - 0.0) / std_ret * numpy.sqrt(periods_per_year)
         return float(sharpe)
-
-    def __get_trade_info(self, start_index):
-        action = self.trades[start_index + ACTION_INDEX]
-        price = self.trades[start_index + PRICE_INDEX]
-        sl = self.trades[start_index + SL_INDEX]
-        tp = self.trades[start_index + TP_INDEX]
-        return action, price, sl, tp
-
-    def __set_trade_info(self, start_index, action, price, sl, tp):
-        self.trades[start_index + ACTION_INDEX] = action
-        self.trades[start_index + PRICE_INDEX] = price
-        self.trades[start_index + SL_INDEX] = sl
-        self.trades[start_index + TP_INDEX] = tp
 
     # todo Calculate reward using Sharpe ratio
     def __calculate_reward(self, high, low, trade):
@@ -146,16 +163,90 @@ class Environment:
 
         return reward, closed
 
-    def __find_empty_trade(self):
-        empty_trade = -1
-        for i in range(self.num_trades):
-            if self.trades[i * ENTRY_PER_TRADE] == 0:
-                empty_trade = i * ENTRY_PER_TRADE
-                break
-        return empty_trade
+    def __clear(self, trades):
+        for trade in trades:
+            self.__set_trade_info(trade, 0, 0, 0, 0)
+            self.open_slots += 1
 
-    def has_next(self):
-        return self.index < len(self.market_data) - 1
+    def __get_high_low(self):
+        current_md = self.market_data[self.index]
+        return current_md[MARKET_HIGH], current_md[MARKET_LOW]
+
+
+class BackTestEnvironment:
+
+    def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
+        self.env = Environment(split, num_trades, atr, macd, rsi)
+
+        self.closed_trades = 0
+        self.total_profit = 0
+        self.total_gain = 0
+        self.total_loss = 0
+        self.num_gain = 0
+        self.num_loss = 0
+
+    def get_current_state(self):
+        return self.env.get_current_state()
+
+    def perform_action(self, action):
+        env = self.env
+
+        env.perform_action(action)
+
+        high, low = env.__get_high_low()
+
+        for trade in range(env.num_trades):
+            action, price, sl, tp = env.__get_trade_info(trade)
+
+            to_clear = []
+            match action:
+                case Direction.SELL.value:
+                    if sl < high:
+                        profit = price - sl
+                        self.__record_loss(profit * -1)
+                        to_clear.append(trade)
+                    elif tp > low:
+                        profit = price - tp
+                        self.__record_gain(profit)
+                        to_clear.append(trade)
+                case Direction.BUY.value:
+                    if sl > low:
+                        profit = sl - price
+                        self.__record_loss(profit * -1)
+                        to_clear.append(trade)
+                    elif tp < high:
+                        profit = tp - price
+                        self.__record_gain(profit)
+                        to_clear.append(trade)
+
+        env.__clear(to_clear)
+
+    def __record_loss(self, loss):
+        self.closed_trades += 1
+        self.total_profit -= loss
+        self.total_loss += loss
+        self.num_loss += 1
+
+    def __record_gain(self, gain):
+        self.closed_trades += 1
+        self.total_profit += gain
+        self.total_gain += gain
+        self.num_gain += 1
+
+    def get_results(self):
+        win_rate = self.num_gain / self.closed_trades
+        loss_rate = self.num_loss / self.closed_trades
+
+        avg_gain = self.total_gain / self.num_gain
+        avg_loss = self.total_loss / self.num_loss
+        expectancy = (win_rate * avg_gain) - (loss_rate * avg_loss)
+
+        profit_factor = self.total_gain / self.total_loss
+
+        max_drawdown = 0
+        sharpe_ratio = 0
+        return win_rate, expectancy, profit_factor, max_drawdown, sharpe_ratio
+
 
 if __name__ == "__main__":
     env = Environment("train", 2)

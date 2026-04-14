@@ -14,6 +14,17 @@ MARKET_LOW = 2
 MARKET_CLOSE = 3
 
 
+def set_sl_tp(price, action):
+    tp, sl = 0, 0
+    if action.direction == Direction.BUY:
+        sl = price - price * action.sl
+        tp = price + price * action.tp
+    if action.direction == Direction.SELL:
+        sl = price + price * action.sl
+        tp = price - price * action.tp
+    return sl, tp
+
+
 class Environment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
@@ -46,13 +57,7 @@ class Environment:
         empty_trade = self.__find_empty_trade()
 
         price = state[MARKET_CLOSE]
-        tp, sl = 0, 0
-        if direction == Direction.BUY:
-            sl = price - price * action.sl
-            tp = price + price * action.tp
-        if direction == Direction.SELL:
-            sl = price + price * action.sl
-            tp = price - price * action.tp
+        sl, tp = set_sl_tp(price, action)
 
         self.__set_trade_info(empty_trade, direction.value, state[MARKET_CLOSE], sl, tp)
         self.open_slots -= 1
@@ -61,18 +66,18 @@ class Environment:
         return self.get_current_state()
 
     def get_reward_and_clear_trades(self):
-        current_md = self.market_data[self.index]
-        high = current_md[MARKET_HIGH]
-        low = current_md[MARKET_LOW]
+        high, low = self.__get_high_low()
 
         sum_reward = 0
+        to_clear = []
         for i in range(self.num_trades):
             trade = i * ENTRY_PER_TRADE
             reward, closed = self.__calculate_reward(high, low, trade)
             sum_reward += reward
             if closed:
-                self.__set_trade_info(trade, 0, 0, 0, 0)
-                self.open_slots += 1
+                to_clear.append(trade)
+
+        self.__clear(to_clear)
 
         self.current_equity += sum_reward
         self.equity_curve.append(self.current_equity)
@@ -126,6 +131,7 @@ class Environment:
         sharpe = (mean_ret - 0.0) / std_ret * numpy.sqrt(periods_per_year)
         return float(sharpe)
 
+    # todo Calculate reward using Sharpe ratio
     def __calculate_reward(self, high, low, trade):
         action, price, sl, tp = self.__get_trade_info(trade)
 
@@ -151,11 +157,20 @@ class Environment:
 
         return reward, closed
 
+    def __clear(self, trades):
+        for trade in trades:
+            self.__set_trade_info(trade, 0, 0, 0, 0)
+            self.open_slots += 1
 
-class BackTestEnvironment(Environment):
+    def __get_high_low(self):
+        current_md = self.market_data[self.index]
+        return current_md[MARKET_HIGH], current_md[MARKET_LOW]
+
+
+class BackTestEnvironment:
 
     def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
-        super().__init__(split, num_trades, atr, macd, rsi)
+        self.env = Environment(split, num_trades, atr, macd, rsi)
 
         self.closed_trades = 0
         self.total_profit = 0

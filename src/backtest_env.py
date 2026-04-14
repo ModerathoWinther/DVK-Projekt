@@ -72,5 +72,5 @@ class BackTestEnvironment:
         profit_factor = self.total_gain / self.total_loss
 
         max_drawdown = 0
-        sharpe_ratio = 0
+        sharpe_ratio = self.env.calc_sharpe_ratio()
         return win_rate, expectancy, profit_factor, max_drawdown, sharpe_ratio

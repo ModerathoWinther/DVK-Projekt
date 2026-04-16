@@ -47,6 +47,7 @@ class TradingEnvironment(gym.Env):
         self.current_step = 0
         self.max_steps = len(self.market_data) - 1
         self.pnl_mean_estimate, self.pnl_scale = self._calc_pnl_mean_and_scale()
+        self.tp_hits = self.sl_hits = 0
 
         # Portfolio state
         self.current_equity = self.initial_capital
@@ -84,11 +85,14 @@ class TradingEnvironment(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        self.tp_hits = 0
+        self.sl_hits = 0
         self.current_step = 0
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
         self.open_slots = self.num_trades
         self.trades.fill(0.0)
+        self._recent_returns.clear()
         return self._get_observation(), {}
 
     def step(self, action: int):

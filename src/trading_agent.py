@@ -53,7 +53,6 @@ class TradingAgent:
         self.GRAPH_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.png')
 
     def run(self, is_training=True):
-        episode_steps = 0
         if is_training:
             start_time = datetime.now()
             last_graph_update_time = start_time
@@ -181,8 +180,8 @@ class TradingAgent:
                         episode_steps = step_count
                         target_dqn.load_state_dict(policy_dqn.state_dict())
                         step_count = 0
-            print(f"{datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  n steps: {episode_steps}  |  STATUS = Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe: 3f}  |  (episode reward: {episode_reward:.1f})  |  equity diff: {env.initial_capital - env.current_equity}")
-            episode_steps = 0
+            win_rate = env.tp_hits / max(1, env.tp_hits + env.sl_hits)
+            print(f"{datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  win_rate: {win_rate}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe: 3f}  |  (episode reward: {episode_reward:.1f})  |  equity diff: {env.initial_capital - env.current_equity}")
 
     def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode):
         # Create the figure with a larger width to accommodate 3 plots

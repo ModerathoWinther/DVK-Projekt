@@ -22,22 +22,24 @@ class TradingEnvironment(gym.Env):
 
         self.market_data = init_state.run(**params)
         col = 0
-        self.col_open = col;
+        self.col_open = col
         col += 1
-        self.col_high = col;
+        self.col_high = col
         col += 1
-        self.col_low = col;
+        self.col_low = col
         col += 1
-        self.col_close = col;
+        self.col_close = col
         col += 1
+        self.col_vol = col
+        col +=1
         if self.atr:
-            self.col_atr = col;
+            self.col_atr = col
             col += 1
         if self.macd:
-            self.col_macd = col;
+            self.col_macd = col
             col += 3
         if self.rsi:
-            self.col_rsi = col;
+            self.col_rsi = col
             col += 1
 
         self._recent_returns = deque(maxlen=96)
@@ -162,6 +164,8 @@ class TradingEnvironment(gym.Env):
 
         sharpe = (mean_ret - 0.0) / std_ret * np.sqrt(periods_per_year)
         return float(sharpe)
+
+
 
     def render(self):
         pass

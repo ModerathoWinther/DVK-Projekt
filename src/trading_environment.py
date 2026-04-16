@@ -63,6 +63,23 @@ class TradingEnvironment(gym.Env):
         self.SL_ATR_MULT = 1.5
         self.TP_ATR_MULT = 3.0
 
+    def calculate_sharpe_ratio(self) -> float:
+        if len(self.equity_curve) < 2:
+            return 0.0
+
+        equity = np.array(self.equity_curve)
+        returns = np.diff(equity) / equity[:-1]
+
+        if len(returns) == 0 or np.std(returns) == 0:
+            return 0.0
+
+        mean_ret = np.mean(returns)
+        std_ret = np.std(returns)
+        periods_per_year = 252 * 96
+
+        sharpe = (mean_ret - 0.0) / std_ret * np.sqrt(periods_per_year)
+        return float(sharpe)
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.current_step = 0
@@ -124,6 +141,7 @@ class TradingEnvironment(gym.Env):
 
         return total_reward, closed
 
+
     def _sharpe_reward(self, pnl: float) -> float:
         self._recent_returns.append(pnl)
         if len(self._recent_returns) < 2:
@@ -147,25 +165,6 @@ class TradingEnvironment(gym.Env):
         current_md = self.market_data[self.current_step]
         flat_trades = self.trades.flatten()
         return np.concatenate([current_md, flat_trades]).astype(np.float32)
-
-    def calculate_sharpe_ratio(self) -> float:
-        if len(self.equity_curve) < 2:
-            return 0.0
-
-        equity = np.array(self.equity_curve)
-        returns = np.diff(equity) / equity[:-1]
-
-        if len(returns) == 0 or np.std(returns) == 0:
-            return 0.0
-
-        mean_ret = np.mean(returns)
-        std_ret = np.std(returns)
-        periods_per_year = 252 * 96  # 15-minute bars, Trading days * 24h * 4 bars/h
-
-        sharpe = (mean_ret - 0.0) / std_ret * np.sqrt(periods_per_year)
-        return float(sharpe)
-
-
 
     def render(self):
         pass

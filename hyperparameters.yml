@@ -5,11 +5,11 @@ midas-train1:
     atr: true
     macd: true
     rsi: true
-    initial_capital: 1.0
+    initial_capital: 10000.0
     transaction_cost: 0.0002
   env_id: 'midas-train1'
   state_dim: 12
-  action_dim: 2
+  action_dim: 19
   learning_rate_a: 0.0002
   epsilon_init: 1
   epsilon_decay: 0.999999
@@ -34,7 +34,7 @@ midas-train2:
     transaction_cost: 0.0002
   env_id: 'midas-train1'
   state_dim: 12
-  action_dim: 2
+  action_dim: 19
   learning_rate_a: 0.001
   epsilon_init: 1
   epsilon_decay: 0.995

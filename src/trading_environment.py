@@ -63,9 +63,6 @@ class TradingEnvironment(gym.Env):
 
         self.action_space = spaces.Discrete(len(ACTION_SPACE))
 
-        self.SL_ATR_MULT = 1.5
-        self.TP_ATR_MULT = 3.0
-
     def calculate_sharpe_ratio(self) -> float:
         if len(self.equity_curve) < 2:
             return 0.0
@@ -85,33 +82,26 @@ class TradingEnvironment(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.tp_hits = 0
-        self.sl_hits = 0
         self.current_step = 0
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
         self.open_slots = self.num_trades
         self.trades.fill(0.0)
-        self._recent_returns.clear()
         return self._get_observation(), {}
 
     def step(self, action: int):
         current_md = self.market_data[self.current_step]
-        high = current_md[self.col_high]
-        low = current_md[self.col_low]
-        close = current_md[self.col_close]
+        high, low, close = current_md[self.col_high], current_md[self.col_low], current_md[self.col_close]
 
         realized_pnl, _ = self._process_trades(high, low)
 
         act = ACTION_SPACE[action]
         if act.direction != Direction.HOLD and self.open_slots > 0:
-            price = close
-            atr = current_md[self.col_atr]
-            sl = price - act.direction.value * self.SL_ATR_MULT * atr
-            tp = price + act.direction.value * self.TP_ATR_MULT * atr
+            sl = close - act.direction.value * act.sl
+            tp = close + act.direction.value * act.tp
             for i in range(self.num_trades):
                 if self.trades[i, 0] == 0:
-                    self.trades[i] = [act.direction.value, price, sl, tp]
+                    self.trades[i] = [act.direction.value, close, sl, tp]
                     self.open_slots -= 1
                     break
 
@@ -129,7 +119,7 @@ class TradingEnvironment(gym.Env):
         return np.concatenate([current_md, flat_trades]).astype(np.float32)
 
     def _process_trades(self, high: float, low: float) -> tuple[float, int]:
-        total_reward = 0.0
+        realized_pnl = 0.0
         closed = 0
         for i in range(self.num_trades):
             if self.trades[i, 0] == 0:
@@ -137,17 +127,21 @@ class TradingEnvironment(gym.Env):
 
             direction, entry_price, sl, tp = self.trades[i]
 
-            hit_sl = (direction > 0 and low <= sl) or (direction < 0 and high >= sl)
-            hit_tp = (direction > 0 and high >= tp) or (direction < 0 and low <= tp)
+            hit_sl = (direction > 0 and low  <= sl) or (direction < 0 and high >= sl)
+            hit_tp = (direction > 0 and high >= tp) or (direction < 0 and low  <= tp)
 
             if hit_sl or hit_tp:
                 pnl = (tp - entry_price) * direction if hit_tp else (sl - entry_price) * direction
-                total_reward += pnl - self.transaction_cost * abs(entry_price)
+                realized_pnl += pnl - self.transaction_cost * abs(entry_price)
                 self.trades[i] = [0, 0, 0, 0]
                 self.open_slots += 1
                 closed += 1
+                if hit_tp:
+                    self.tp_hits += 1
+                else:
+                    self.sl_hits += 1
 
-        return total_reward, closed
+        return realized_pnl, closed
 
     def _unrealized_pnl(self, current_price: float) -> float:
         total = 0.0
@@ -164,19 +158,17 @@ class TradingEnvironment(gym.Env):
         return float(np.clip(normalised, -10.0, 10.0))
 
     def _calc_pnl_mean_and_scale(self) -> tuple[float, float]:
-        atr_col = self.market_data[:, self.col_atr]
-        median_atr = float(np.median(atr_col))
+        non_hold = [a for a in ACTION_SPACE if a.direction != Direction.HOLD]
+        avg_tp = float(np.mean([a.tp for a in non_hold]))
+        avg_sl = float(np.mean([a.sl for a in non_hold]))
 
         assumed_win_rate = 0.50
-        expected_tp = median_atr * self.TP_ATR_MULT
-        expected_sl = median_atr * self.SL_ATR_MULT
-        expected_cost = self.transaction_cost * float(np.median(self.market_data[:, self.col_close]))
+        expected_cost = self.transaction_cost * float(
+            np.median(np.abs(self.market_data[:, self.col_close]))
+        )
 
-        pnl_mean = (assumed_win_rate * expected_tp
-                    - (1 - assumed_win_rate) * expected_sl
-                    - expected_cost)
-
-        pnl_scale = assumed_win_rate * expected_tp + (1 - assumed_win_rate) * expected_sl
+        pnl_mean  = assumed_win_rate * avg_tp - (1 - assumed_win_rate) * avg_sl - expected_cost
+        pnl_scale = assumed_win_rate * avg_tp + (1 - assumed_win_rate) * avg_sl
 
         return pnl_mean, pnl_scale
 

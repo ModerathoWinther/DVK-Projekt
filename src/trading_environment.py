@@ -45,6 +45,7 @@ class TradingEnvironment(gym.Env):
         self._recent_returns = deque(maxlen=96)
         self.current_step = 0
         self.max_steps = len(self.market_data) - 1
+        self.pnl_mean_estimate, self.pnl_scale = self._calc_pnl_mean_and_scale()
 
         # Portfolio state
         self.current_equity = self.initial_capital
@@ -143,15 +144,27 @@ class TradingEnvironment(gym.Env):
 
 
     def _sharpe_reward(self, pnl: float) -> float:
-        self._recent_returns.append(pnl)
-        if len(self._recent_returns) < 2:
-            return pnl
-        std = np.std(self._recent_returns)
-        if std < 1e-8:
+        if pnl == 0.0 or self.pnl_scale < 1e-8:
             return 0.0
-        shaped = pnl / std
+        normalised = (pnl - self.pnl_mean_estimate) / self.pnl_scale
+        return float(np.clip(normalised, -10.0, 10.0))
 
-        return shaped
+    def _calc_pnl_mean_and_scale(self) -> tuple[float, float]:
+        atr_col = self.market_data[:, self.col_atr]
+        median_atr = float(np.median(atr_col))
+
+        assumed_win_rate = 0.50
+        expected_tp = median_atr * self.TP_ATR_MULT
+        expected_sl = median_atr * self.SL_ATR_MULT
+        expected_cost = self.transaction_cost * float(np.median(self.market_data[:, self.col_close]))
+
+        pnl_mean = (assumed_win_rate * expected_tp
+                    - (1 - assumed_win_rate) * expected_sl
+                    - expected_cost)
+
+        pnl_scale = assumed_win_rate * expected_tp + (1 - assumed_win_rate) * expected_sl
+
+        return pnl_mean, pnl_scale
 
     def _unrealized_pnl(self, current_price: float) -> float:
         total = 0.0

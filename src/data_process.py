@@ -48,7 +48,6 @@ def validate_ohlcv(df: pd.DataFrame, split: str) -> None:
               f"the modal interval ({modal_gap}) — possible missing bars")
 
 
-
 def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ind.macd(df)
     ind.atr(df)
@@ -148,9 +147,12 @@ def run():
     for split in DATASET_SPLITS:
         splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
 
+    save_normalized_prices(splits_raw["train"])
+
     for split, df in splits_raw.items():
         splits_ind = build_indicators(df.copy())
         save_separate_indicator_files(splits_ind, split)
+
 
 if __name__ == "__main__":
     run()

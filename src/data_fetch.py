@@ -12,7 +12,9 @@ TIMEZONE = pytz.timezone("Etc/UTC")
 DATE_FROM = datetime(2016, 1, 1, tzinfo=TIMEZONE)
 DATE_TO = datetime(2025, 12, 31, hour=23, tzinfo=TIMEZONE)
 
-OUTPUT_DIR = os.path.abspath("../data/raw")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "../data")
+OUTPUT_DIR = os.path.join(DATA_DIR, "raw")
 FILE_NAME = os.path.join(OUTPUT_DIR, f"{SYMBOL}_{TIMEFRAME}M_{DATE_FROM.date()}_{DATE_TO.date()}.csv")
 SPLITS = ["train", "val", "test"]
 

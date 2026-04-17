@@ -6,10 +6,10 @@ import data_fetch
 import indicators as ind
 
 INPUT_DIR = data_fetch.OUTPUT_DIR
-OUTPUT_DIR = "../data/processed/indicators"
+OUTPUT_DIR = os.path.join(data_fetch.DATA_DIR, "processed/indicators")
+NORMALIZED_OUTPUT = os.path.join(data_fetch.DATA_DIR, "processed/normalized/train.csv")
 DATASET_SPLITS = ["train", "val", "test"]
 SYMBOL = "XAUUSD"
-NORMALIZED_OUTPUT = "../data/processed/normalized/train.csv"
 
 
 def load_split(split: str) -> pd.DataFrame:

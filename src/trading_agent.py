@@ -155,7 +155,7 @@ class TradingAgent:
                 # Update graph every x seconds
                 current_time = datetime.now()
                 if current_time - last_graph_update_time > timedelta(seconds=10):
-                    self.save_graph(rewards_per_episode, epsilon_tracker, sharpe_per_episode)
+                    self.save_graph(rewards_per_episode, epsilon_tracker, sharpe_per_episode, win_rate)
                     last_graph_update_time = current_time
 
                 # If enough experience has been collected
@@ -169,37 +169,39 @@ class TradingAgent:
                         step_count = 0
             print(log_message)
 
-    def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode):
-        # Create the figure with a larger width to accommodate 3 plots
-        fig = plt.figure(figsize=(15, 5))
+    def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode, win_rate):
+        fig = plt.figure(figsize=(15, 10))
 
-        # Calculate Moving Averages
-        mean_rewards = np.zeros(len(rewards_per_episode))
-        mean_sharpe = np.zeros(len(sharpe_per_episode))
+        mean_rewards = np.array([np.mean(rewards_per_episode[max(0, x - 99):x + 1])
+                                 for x in range(len(rewards_per_episode))])
+        mean_sharpe = np.array([np.mean(sharpe_per_episode[max(0, x - 99):x + 1])
+                                for x in range(len(sharpe_per_episode))])
 
-        for x in range(len(mean_rewards)):
-            mean_rewards[x] = np.mean(rewards_per_episode[max(0, x - 99):(x + 1)])
-        for x in range(len(mean_sharpe)):
-            mean_sharpe[x] = np.mean(sharpe_per_episode[max(0, x - 99):(x + 1)])
-
-        plt.subplot(131)
+        plt.subplot(221)
         plt.ylabel('Mean Rewards (100-ep MA)')
         plt.xlabel('Episodes')
         plt.plot(mean_rewards, color='blue')
 
-        plt.subplot(132)
-        plt.ylabel('Epsilon Decay')
-        plt.xlabel('N steps')
+        plt.subplot(222)
+        plt.ylabel('Epsilon')
+        plt.xlabel('Steps')
         plt.plot(epsilon_history, color='orange')
 
-        plt.subplot(133)
-        plt.ylabel('Mean Sharpe Ratio (100-ep MA)')
+        plt.subplot(223)
+        plt.ylabel('Mean Sharpe (100-ep MA)')
         plt.xlabel('Episodes')
         plt.plot(mean_sharpe, color='green')
 
-        plt.tight_layout()
+        plt.subplot(224)
+        plt.ylabel('Win Rate')
+        plt.xlabel('Episodes')
+        plt.plot(win_rate, color='red')
+        plt.axhline(y=0.333, color='black', linestyle='--', label='Break-even')
+        plt.legend()
 
-        fig.savefig(self.GRAPH_FILE)
+        plt.tight_layout()
+        pdf_path = self.GRAPH_FILE.replace('.png', '.pdf')
+        fig.savefig(pdf_path, format='pdf')
         plt.close(fig)
 
     def optimize(self, mini_batch, policy_dqn, target_dqn):

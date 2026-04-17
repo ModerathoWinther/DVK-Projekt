@@ -82,6 +82,8 @@ class TradingEnvironment(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        self.tp_hits = 0
+        self.sl_hits = 0
         self.current_step = 0
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]

@@ -43,7 +43,7 @@ class TradingEnvironment(gym.Env):
             self.col_rsi = col
             col += 1
 
-        self._recent_returns = deque(maxlen=96)
+        self._recent_returns = deque(maxlen=92)
         self.current_step = 0
         self.max_steps = len(self.market_data) - 1
         self.pnl_mean_estimate, self.pnl_scale = self._calc_pnl_mean_and_scale()
@@ -93,7 +93,7 @@ class TradingEnvironment(gym.Env):
         std_ret = np.std(active_returns, ddof=1)
         if std_ret < 1e-8:
             return 0.0
-        return float((np.mean(active_returns) / std_ret) * np.sqrt(252 * 96))
+        return float((np.mean(active_returns) / std_ret) * np.sqrt(252 * 92))
 
     def step(self, action: int):
         current_md = self.market_data[self.current_step]

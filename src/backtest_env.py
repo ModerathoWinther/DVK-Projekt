@@ -71,6 +71,24 @@ class BackTestEnvironment:
 
         profit_factor = self.total_gain / self.total_loss
 
-        max_drawdown = 0
+        peak = max(self.env.equity_curve)
+        trough = min(self.env.equity_curve)
+
+        max_drawdown = (trough - peak) / peak
         sharpe_ratio = self.env.calc_sharpe_ratio()
         return win_rate, expectancy, profit_factor, max_drawdown, sharpe_ratio
+
+
+def run():
+    env = BackTestEnvironment("train", 2)
+    print(env.get_current_state())
+    env.perform_action(HOLD_ACTION)
+    print(env.get_current_state())
+    env.perform_action(ACTION_SPACE[1])
+    print(env.get_current_state())
+    env.perform_action(HOLD_ACTION)
+    print(env.get_current_state())
+    print("Reward:", env.get_reward_and_clear_trades())
+
+if __name__ == "__main__":
+    run()

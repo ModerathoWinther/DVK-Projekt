@@ -58,7 +58,6 @@ class TradingAgent:
             last_graph_update_time = start_time
 
             log_message = f"{start_time.strftime(DATE_FORMAT)}: Training starting..."
-            print(log_message)
             with open(self.LOG_FILE, 'w') as file:
                 file.write(log_message + '\n')
 
@@ -131,7 +130,7 @@ class TradingAgent:
 
                 state = new_state
 
-            # Keep track of the rewards collected per episode.
+            # Keep track of the rewards collected per step.
             rewards_per_episode.append(episode_reward)
 
             episode_sharpe = env.calculate_sharpe_ratio()
@@ -139,25 +138,14 @@ class TradingAgent:
 
             # Save model when new best reward is obtained.
             if is_training:
-
-
+                win_rate = env.tp_hits / max(1, env.tp_hits + env.sl_hits)
+                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}  |  (episode reward: {episode_reward:.1f})  |  equity diff: {(env.initial_capital - env.current_equity):.3f}"
                 if episode_sharpe > best_sharpe:
-                    log_message = f"{datetime.now().strftime(DATE_FORMAT)}  |  New best Sharpe {episode_sharpe: 3f} (episode reward: {episode_reward:.1f}) at episode {episode}"
-
-                    print(log_message)
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
                     best_sharpe = episode_sharpe
 
                 if episode_reward > best_reward:
-                    log_message = (
-                        f"{datetime.now().strftime(DATE_FORMAT)}  | Episode {episode} | "
-                        f"Reward: {episode_reward:.2f} | "
-                        f"Equity diff: {env.current_equity - env.initial_capital:.2f} | "
-                        f"Sharpe: {episode_sharpe:.3f} | "
-                        f"Epsilon: {epsilon:.3f}"
-                    )
-                    print(log_message)
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
 
@@ -177,11 +165,9 @@ class TradingAgent:
 
                     # Copy policy network to target network after a certain number of steps
                     if step_count > self.network_sync_rate:
-                        episode_steps = step_count
                         target_dqn.load_state_dict(policy_dqn.state_dict())
                         step_count = 0
-            win_rate = env.tp_hits / max(1, env.tp_hits + env.sl_hits)
-            print(f"{datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  win_rate: {win_rate}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe: 3f}  |  (episode reward: {episode_reward:.1f})  |  equity diff: {env.initial_capital - env.current_equity}")
+            print(log_message)
 
     def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode):
         # Create the figure with a larger width to accommodate 3 plots
@@ -203,7 +189,7 @@ class TradingAgent:
 
         plt.subplot(132)
         plt.ylabel('Epsilon Decay')
-        plt.xlabel('Episodes')
+        plt.xlabel('N steps')
         plt.plot(epsilon_history, color='orange')
 
         plt.subplot(133)
@@ -239,6 +225,7 @@ class TradingAgent:
         loss = self.loss_fn(current_q, target_q)
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(policy_dqn.parameters(), max_norm=1.0)
         self.optimizer.step()
 
 if __name__ == '__main__':

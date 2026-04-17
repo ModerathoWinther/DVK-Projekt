@@ -63,22 +63,11 @@ class TradingEnvironment(gym.Env):
 
         self.action_space = spaces.Discrete(len(ACTION_SPACE))
 
-    def calculate_sharpe_ratio(self) -> float:
-        if len(self.equity_curve) < 2:
-            return 0.0
-
-        equity = np.array(self.equity_curve)
-        returns = np.diff(equity) / equity[:-1]
-
-        if len(returns) == 0 or np.std(returns) == 0:
-            return 0.0
-
-        mean_ret = np.mean(returns)
-        std_ret = np.std(returns)
-        periods_per_year = 252 * 96
-
-        sharpe = (mean_ret - 0.0) / std_ret * np.sqrt(periods_per_year)
-        return float(sharpe)
+        print(
+            f"Close range: {self.market_data[:, self.col_close].min():.4f} to {self.market_data[:, self.col_close].max():.4f}")
+        print(f"Median close: {np.median(self.market_data[:, self.col_close]):.4f}")
+        print(f"pnl_mean={self.pnl_mean_estimate:.6f}, pnl_scale={self.pnl_scale:.6f}")
+        print(f"SL distances: {[a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]}")
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -90,6 +79,21 @@ class TradingEnvironment(gym.Env):
         self.open_slots = self.num_trades
         self.trades.fill(0.0)
         return self._get_observation(), {}
+
+    def calculate_sharpe_ratio(self) -> float:
+        if len(self.equity_curve) < 2:
+            return 0.0
+        equity = np.array(self.equity_curve)
+        if np.any(equity <= 0):
+            return -999.0
+        returns = np.diff(equity) / equity[:-1]
+        active_returns = returns[returns != 0.0]
+        if len(active_returns) < 2:
+            return 0.0
+        std_ret = np.std(active_returns, ddof=1)
+        if std_ret < 1e-8:
+            return 0.0
+        return float((np.mean(active_returns) / std_ret) * np.sqrt(252 * 96))
 
     def step(self, action: int):
         current_md = self.market_data[self.current_step]

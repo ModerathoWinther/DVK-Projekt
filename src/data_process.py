@@ -53,9 +53,9 @@ def validate_ohlcv(df: pd.DataFrame, split: str) -> None:
 
 def make_stationary(df: pd.DataFrame) -> pd.DataFrame:
     stationary = pd.DataFrame({
-        "high_dist": df['high'] - df['open'],
-        "low_dist":  df['open'] - df['low'],
-        "close_dist": df['close'] - df['open'],
+        "high_wick": df['high'] - df['open'],
+        "low_wick":  df['open'] - df['low'],
+        "trend": df['close'] - df['open'],
         "volume": df['volume'],
     }, index=df.index)
     return stationary

@@ -1,6 +1,7 @@
 import os
 from action_space import ACTION_SPACE
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+os.chdir('..')
 import argparse
 import itertools
 import random
@@ -132,14 +133,14 @@ class TradingAgent:
 
             # Keep track of the rewards collected per step.
             rewards_per_episode.append(episode_reward)
+            win_rate = env.tp_hits / max(1, env.tp_hits + env.sl_hits)
 
             episode_sharpe = env.calculate_sharpe_ratio()
             sharpe_per_episode.append(episode_sharpe)
 
             # Save model when new best reward is obtained.
             if is_training:
-                win_rate = env.tp_hits / max(1, env.tp_hits + env.sl_hits)
-                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}  |  (episode reward: {episode_reward:.1f})  |  equity diff: {(env.initial_capital - env.current_equity):.3f}"
+                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}\t|  (episode reward: {episode_reward:.1f})\t|  equity diff: {(env.initial_capital - env.current_equity):.3f}"
                 if episode_sharpe > best_sharpe:
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
@@ -156,7 +157,7 @@ class TradingAgent:
                 current_time = datetime.now()
                 if current_time - last_graph_update_time > timedelta(seconds=10):
                     self.save_graph(rewards_per_episode, epsilon_tracker, sharpe_per_episode, win_rate)
-                    last_graph_update_time = current_time
+                    last_graphf_update_time = current_time
 
                 # If enough experience has been collected
                 if len(memory) > self.mini_batch_size:

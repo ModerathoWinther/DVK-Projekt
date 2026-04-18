@@ -1,10 +1,10 @@
-from environment import Environment
+from trading_environment import TradingEnvironment
 from action_space import Direction, Action, HOLD_ACTION, ACTION_SPACE
 
 class BackTestEnvironment:
 
-    def __init__(self, split, num_trades, atr=False, macd=False, rsi=False):
-        self.env = Environment(split, num_trades, atr, macd, rsi)
+    def __init__(self, params):
+        self.env = TradingEnvironment(params)
 
         self.closed_trades = 0
         self.total_profit = 0
@@ -13,13 +13,11 @@ class BackTestEnvironment:
         self.num_gain = 0
         self.num_loss = 0
 
-    def get_current_state(self):
-        return self.env.get_current_state()
+        self.episode_results = []
 
-    def perform_action(self, action):
+    def step(self, action):
         env = self.env
-
-        env.perform_action(action)
+        observation, _ = env.step(action)
 
         high, low = env.__get_high_low()
 

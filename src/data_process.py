@@ -5,9 +5,12 @@ import pandas as pd
 import data_fetch
 import indicators as ind
 
+
 INPUT_DIR = data_fetch.OUTPUT_DIR
-OUTPUT_DIR = os.path.join(data_fetch.DATA_DIR, "processed/indicators")
+INDICATOR_DIR = os.path.join(data_fetch.DATA_DIR, "processed/indicators")
+PRICE_OUTPUT = os.path.join(data_fetch.DATA_DIR, "processed/non-normalized/test.csv")
 NORMALIZED_OUTPUT = os.path.join(data_fetch.DATA_DIR, "processed/normalized/train.csv")
+WARMUP_ROWS = 33
 DATASET_SPLITS = ["train", "val", "test"]
 SYMBOL = "XAUUSD"
 
@@ -93,7 +96,7 @@ def apply_normalization(df: pd.DataFrame, params: dict) -> pd.DataFrame:
 
 
 def save_separate_indicator_files(df: pd.DataFrame, split: str) -> None:
-    sep_dir = os.path.join(OUTPUT_DIR, split)
+    sep_dir = os.path.join(INDICATOR_DIR, split)
     os.makedirs(sep_dir, exist_ok=True)
     grouped = {
         "macd": ["macd", "macd_signal", "macd_histogram"],
@@ -127,10 +130,16 @@ def apply_price_zscore(df: pd.DataFrame, price_mean: pd.Series, price_std: pd.Se
         df_out[col] = (df[col] - price_mean[col]) / (price_std[col] + 1e-8)
     return df_out
 
+def save_prices(df: pd.DataFrame) -> None:
+    prices = df.drop(df.index[:WARMUP_ROWS])
+    os.makedirs(os.path.dirname(PRICE_OUTPUT), exist_ok=True)
+    prices.to_csv(PRICE_OUTPUT, index=False)
+    print(f"  Saved back-testing prices → {PRICE_OUTPUT}")
 
 def save_normalized_prices(df: pd.DataFrame) -> None:
+    normalized_prices = df.drop(df.index[:WARMUP_ROWS])
     os.makedirs(os.path.dirname(NORMALIZED_OUTPUT), exist_ok=True)
-    df.to_csv(NORMALIZED_OUTPUT, index=False)
+    normalized_prices.to_csv(NORMALIZED_OUTPUT, index=False)
     print(f"  Saved Z-score normalized training prices → {NORMALIZED_OUTPUT}")
 
 
@@ -144,6 +153,8 @@ def run():
 
     price_mean, price_std = compute_price_zscore_params(splits_raw["train"])
 
+    save_prices(splits_raw["test"])
+
     for split in DATASET_SPLITS:
         splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
 
@@ -152,7 +163,6 @@ def run():
     for split, df in splits_raw.items():
         splits_ind = build_indicators(df.copy())
         save_separate_indicator_files(splits_ind, split)
-
 
 if __name__ == "__main__":
     run()

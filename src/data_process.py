@@ -153,6 +153,8 @@ def run():
 
     price_mean, price_std = compute_price_zscore_params(splits_raw["train"])
 
+    save_prices(splits_raw["test"])
+
     for split in DATASET_SPLITS:
         splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
 
@@ -161,8 +163,6 @@ def run():
     for split, df in splits_raw.items():
         splits_ind = build_indicators(df.copy())
         save_separate_indicator_files(splits_ind, split)
-
-    save_prices(splits_raw["test"])
 
 if __name__ == "__main__":
     run()

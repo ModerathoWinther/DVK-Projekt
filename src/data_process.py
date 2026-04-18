@@ -5,11 +5,11 @@ import pandas as pd
 import data_fetch
 import indicators as ind
 
-
 INPUT_DIR = data_fetch.OUTPUT_DIR
+NORMAL_DIR = os.path.join(data_fetch.DATA_DIR, "processed/normal")
+STATIONARY_DIR = os.path.join(data_fetch.DATA_DIR, "processed/stationary")
 INDICATOR_DIR = os.path.join(data_fetch.DATA_DIR, "processed/indicators")
-PRICE_OUTPUT = os.path.join(data_fetch.DATA_DIR, "processed/non-normalized/test.csv")
-NORMALIZED_OUTPUT = os.path.join(data_fetch.DATA_DIR, "processed/normalized/train.csv")
+
 WARMUP_ROWS = 33
 DATASET_SPLITS = ["train", "val", "test"]
 SYMBOL = "XAUUSD"
@@ -49,6 +49,16 @@ def validate_ohlcv(df: pd.DataFrame, split: str) -> None:
     if large_gaps:
         print(f"  WARNING [{split}]: {large_gaps} time gaps larger than 3× "
               f"the modal interval ({modal_gap}) — possible missing bars")
+
+
+def make_stationary(df: pd.DataFrame) -> pd.DataFrame:
+    stationary = pd.DataFrame({
+        "high_dist": df['high'] - df['open'],
+        "low_dist":  df['open'] - df['low'],
+        "close_dist": df['close'] - df['open'],
+        "volume": df['volume'],
+    }, index=df.index)
+    return stationary
 
 
 def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -108,17 +118,17 @@ def apply_price_zscore(df: pd.DataFrame, price_mean: pd.Series, price_std: pd.Se
         df_out[col] = (df[col] - price_mean[col]) / (price_std[col] + 1e-8)
     return df_out
 
-def save_prices(df: pd.DataFrame) -> None:
-    prices = df.drop(df.index[:WARMUP_ROWS])
-    os.makedirs(os.path.dirname(PRICE_OUTPUT), exist_ok=True)
-    prices.to_csv(PRICE_OUTPUT, index=False)
-    print(f"  Saved back-testing prices → {PRICE_OUTPUT}")
 
-def save_normalized_prices(df: pd.DataFrame) -> None:
-    normalized_prices = df.drop(df.index[:WARMUP_ROWS])
-    os.makedirs(os.path.dirname(NORMALIZED_OUTPUT), exist_ok=True)
-    normalized_prices.to_csv(NORMALIZED_OUTPUT, index=False)
-    print(f"  Saved Z-score normalized training prices → {NORMALIZED_OUTPUT}")
+def save_candlesticks(df: pd.DataFrame, split) -> None:
+    candlestick = df.drop(df.index[:WARMUP_ROWS])
+    os.makedirs(NORMAL_DIR, exist_ok=True)
+    candlestick.to_csv(f"{NORMAL_DIR}/{split}.csv", index=False)
+
+
+def save_stationary_data(df: pd.DataFrame, split) -> None:
+    stationary = df.drop(df.index[:WARMUP_ROWS])
+    os.makedirs(STATIONARY_DIR, exist_ok=True)
+    stationary.to_csv(f"{STATIONARY_DIR}/{split}.csv", index=False)
 
 
 def run():
@@ -129,18 +139,20 @@ def run():
     for split, df in splits_raw.items():
         validate_ohlcv(df, split)
 
-    price_mean, price_std = compute_price_zscore_params(splits_raw["train"])
-
-    save_prices(splits_raw["test"])
-
     for split in DATASET_SPLITS:
-        splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
-
-    save_normalized_prices(splits_raw["train"])
+        save_candlesticks(splits_raw[split], split)
+        save_stationary_data(make_stationary(splits_raw[split]), split)
 
     for split, df in splits_raw.items():
         splits_ind = build_indicators(df.copy())
         save_separate_indicator_files(splits_ind, split)
+
+    """
+    for split in DATASET_SPLITS:
+        splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
+    save_normalized_prices(splits_raw["train"])
+    """
+
 
 if __name__ == "__main__":
     run()

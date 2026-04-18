@@ -38,11 +38,9 @@ class TradingEnvironment(gym.Env):
             self.col_rsi = col
             col += 1
 
-        self.col_open = 0
-        self.col_high = 1
-        self.col_low = 2
-        self.col_close = 3
-        self.col_real_vol = 4
+        self.col_high = 0
+        self.col_low = 1
+        self.col_close = 2
 
         self._recent_returns = deque(maxlen=92)
         self.current_step = 0

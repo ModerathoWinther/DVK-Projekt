@@ -29,7 +29,7 @@ def get_input_data(split, atr=False, macd=False, rsi=False):
 def get_prices(split):
     price = pd.read_csv(f"{PRICE_DIR}/{split}.csv", index_col="date", parse_dates=["date"])
     price = price[['high', 'low', 'close']]
-    return price
+    return price.to_numpy()
 
 def run(**params):
     input_data = get_input_data(params.get('split'), atr=params.get('atr'), macd=params.get('macd'), rsi=params.get('rsi'))

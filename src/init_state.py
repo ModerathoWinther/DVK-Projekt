@@ -6,7 +6,7 @@ import pandas as pd
 import data_process as dp
 
 PRICE_DIR = dp.NORMALIZED_OUTPUT
-INDICATOR_DIR = dp.OUTPUT_DIR
+INDICATOR_DIR = dp.INDICATOR_DIR
 
 
 def get_market_data(split, atr=False, macd=False, rsi=False):

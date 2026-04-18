@@ -21,7 +21,7 @@ class TradingEnvironment(gym.Env):
         self.macd = params.get('macd')
         self.rsi = params.get('rsi')
 
-        self.market_data = init_state.run(**params)
+        self.input_data, self.prices = init_state.run(**params)
         col = 0
         self.col_open = col
         col += 1
@@ -45,7 +45,7 @@ class TradingEnvironment(gym.Env):
 
         self._recent_returns = deque(maxlen=92)
         self.current_step = 0
-        self.max_steps = len(self.market_data) - 1
+        self.max_steps = len(self.input_data) - 1
         self.pnl_mean_estimate, self.pnl_scale = self._calc_pnl_mean_and_scale()
         self.tp_hits = self.sl_hits = 0
 
@@ -57,15 +57,15 @@ class TradingEnvironment(gym.Env):
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(self.market_data.shape[1] + self.num_trades * 4,),
+            shape=(self.input_data.shape[1] + self.num_trades * 4,),
             dtype=np.float32
         )
 
         self.action_space = spaces.Discrete(len(ACTION_SPACE))
 
         print(
-            f"Close range: {self.market_data[:, self.col_close].min():.4f} to {self.market_data[:, self.col_close].max():.4f}")
-        print(f"Median close: {np.median(self.market_data[:, self.col_close]):.4f}")
+            f"Close range: {self.input_data[:, self.col_close].min():.4f} to {self.input_data[:, self.col_close].max():.4f}")
+        print(f"Median close: {np.median(self.input_data[:, self.col_close]):.4f}")
         print(f"pnl_mean={self.pnl_mean_estimate:.6f}, pnl_scale={self.pnl_scale:.6f}")
         print(f"SL distances: {[a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]}")
 
@@ -104,7 +104,7 @@ class TradingEnvironment(gym.Env):
         return float(sharpe)
 
     def step(self, action: int):
-        current_md = self.market_data[self.current_step]
+        current_md = self.input_data[self.current_step]
         high, low, close = current_md[self.col_high], current_md[self.col_low], current_md[self.col_close]
 
         realized_pnl, _ = self._process_trades(high, low)
@@ -128,7 +128,7 @@ class TradingEnvironment(gym.Env):
         return self._get_observation(), reward, self.current_step >= self.max_steps, False, {}
 
     def _get_observation(self):
-        current_md = self.market_data[self.current_step]
+        current_md = self.input_data[self.current_step]
         flat_trades = self.trades.flatten()
         return np.concatenate([current_md, flat_trades]).astype(np.float32)
 
@@ -178,7 +178,7 @@ class TradingEnvironment(gym.Env):
 
         assumed_win_rate = 0.50
         expected_cost = self.transaction_cost * float(
-            np.median(np.abs(self.market_data[:, self.col_close]))
+            np.median(np.abs(self.input_data[:, self.col_close]))
         )
 
         pnl_mean  = assumed_win_rate * avg_tp - (1 - assumed_win_rate) * avg_sl - expected_cost
@@ -188,7 +188,7 @@ class TradingEnvironment(gym.Env):
 
     def _holding_penalty(self) -> float:
         penalty = 0.0
-        close = self.market_data[self.current_step, self.col_close]
+        close = self.input_data[self.current_step, self.col_close]
         for i in range(self.num_trades):
             if self.trades[i, 0] != 0:
                 direction, entry_price, sl, tp = self.trades[i]

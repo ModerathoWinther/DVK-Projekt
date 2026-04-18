@@ -73,28 +73,6 @@ def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def fit_normalization_params(df: pd.DataFrame) -> dict:
-    indicator_cols = [c for c in df.columns if c != "date"]
-    params = {}
-    for col in indicator_cols:
-        params[col] = {"min": df[col].min(), "max": df[col].max()}
-    return params
-
-
-def apply_normalization(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    normalized = df[["date"]].copy()
-    indicator_cols = [c for c in df.columns if c != "date"]
-    for col in indicator_cols:
-        min_val = params[col]["min"]
-        max_val = params[col]["max"]
-        if max_val == min_val:
-            normalized[col] = 0.0
-        else:
-            normalized[col] = (df[col] - min_val) / (max_val - min_val)
-            normalized[col] = normalized[col].clip(0.0, 1.0)
-    return normalized
-
-
 def save_separate_indicator_files(df: pd.DataFrame, split: str) -> None:
     sep_dir = os.path.join(INDICATOR_DIR, split)
     os.makedirs(sep_dir, exist_ok=True)

@@ -157,7 +157,7 @@ class TradingAgent:
                 current_time = datetime.now()
                 if current_time - last_graph_update_time > timedelta(seconds=10):
                     self.save_graph(rewards_per_episode, epsilon_tracker, sharpe_per_episode, win_rate_per_episode)
-                    last_graphf_update_time = current_time
+                    last_graph_update_time = current_time
 
                 # If enough experience has been collected
                 if len(memory) > self.mini_batch_size:

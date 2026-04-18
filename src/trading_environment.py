@@ -22,17 +22,12 @@ class TradingEnvironment(gym.Env):
         self.rsi = params.get('rsi')
 
         self.input_data, self.prices = init_state.run(**params)
-        col = 0
-        self.col_open = col
-        col += 1
-        self.col_high = col
-        col += 1
-        self.col_low = col
-        col += 1
-        self.col_close = col
-        col += 1
-        self.col_vol = col
-        col += 1
+
+        self.col_high_wick = 0
+        self.col_low_wick = 1
+        self.col_trend = 2
+        self.col_input_vol = 3
+        col = 4
         if self.atr:
             self.col_atr = col
             col += 1
@@ -42,6 +37,12 @@ class TradingEnvironment(gym.Env):
         if self.rsi:
             self.col_rsi = col
             col += 1
+
+        self.col_open = 0
+        self.col_high = 1
+        self.col_low = 2
+        self.col_close = 3
+        self.col_real_vol = 4
 
         self._recent_returns = deque(maxlen=92)
         self.current_step = 0
@@ -53,7 +54,8 @@ class TradingEnvironment(gym.Env):
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
         self.open_slots = self.num_trades
-        self.trades = np.zeros((self.num_trades, 4), dtype=np.float32)
+        self.trades_state = np.zeros((self.num_trades, 4), dtype=np.float32)
+        self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
@@ -77,7 +79,7 @@ class TradingEnvironment(gym.Env):
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
         self.open_slots = self.num_trades
-        self.trades.fill(0.0)
+        self.trades_state.fill(0.0)
         return self._get_observation(), {}
 
     def calculate_sharpe_ratio(self) -> float:
@@ -104,8 +106,8 @@ class TradingEnvironment(gym.Env):
         return float(sharpe)
 
     def step(self, action: int):
-        current_md = self.input_data[self.current_step]
-        high, low, close = current_md[self.col_high], current_md[self.col_low], current_md[self.col_close]
+        current_prices = self.prices[self.current_step]
+        high, low, close = current_prices[self.col_high], current_prices[self.col_low], current_prices[self.col_close]
 
         realized_pnl, _ = self._process_trades(high, low)
 
@@ -114,8 +116,8 @@ class TradingEnvironment(gym.Env):
             sl = close - act.direction.value * act.sl
             tp = close + act.direction.value * act.tp
             for i in range(self.num_trades):
-                if self.trades[i, 0] == 0:
-                    self.trades[i] = [act.direction.value, close, sl, tp]
+                if self.trades_state[i, 0] == 0:
+                    self.trades_state[i] = [act.direction.value, close, sl, tp]
                     self.open_slots -= 1
                     break
 
@@ -128,18 +130,27 @@ class TradingEnvironment(gym.Env):
         return self._get_observation(), reward, self.current_step >= self.max_steps, False, {}
 
     def _get_observation(self):
+        current_prices = self.prices[self.current_step]
+        close = current_prices[self.col_close]
         current_md = self.input_data[self.current_step]
-        flat_trades = self.trades.flatten()
+
+        for i in range(len(self.trades_state)):
+            direction, _, sl, tp = self.trades_state[i]
+            tp_dist = abs(tp - close)
+            sl_dist = abs(sl - close)
+            self.trades_obs[i] = direction, tp_dist, sl_dist
+
+        flat_trades = self.trades_state.flatten()
         return np.concatenate([current_md, flat_trades]).astype(np.float32)
 
     def _process_trades(self, high: float, low: float) -> tuple[float, int]:
         realized_pnl = 0.0
         closed = 0
         for i in range(self.num_trades):
-            if self.trades[i, 0] == 0:
+            if self.trades_state[i, 0] == 0:
                 continue
 
-            direction, entry_price, sl, tp = self.trades[i]
+            direction, entry_price, sl, tp = self.trades_state[i]
 
             hit_sl = (direction > 0 and low  <= sl) or (direction < 0 and high >= sl)
             hit_tp = (direction > 0 and high >= tp) or (direction < 0 and low  <= tp)
@@ -147,7 +158,7 @@ class TradingEnvironment(gym.Env):
             if hit_sl or hit_tp:
                 pnl = (tp - entry_price) * direction if hit_tp else (sl - entry_price) * direction
                 realized_pnl += pnl - self.transaction_cost * abs(entry_price)
-                self.trades[i] = [0, 0, 0, 0]
+                self.trades_state[i] = [0, 0, 0, 0]
                 self.open_slots += 1
                 closed += 1
                 if hit_tp:
@@ -160,8 +171,8 @@ class TradingEnvironment(gym.Env):
     def _unrealized_pnl(self, current_price: float) -> float:
         total = 0.0
         for i in range(self.num_trades):
-            if self.trades[i, 0] != 0:
-                direction, entry_price, sl, tp = self.trades[i]
+            if self.trades_state[i, 0] != 0:
+                direction, entry_price, sl, tp = self.trades_state[i]
                 total += (current_price - entry_price) * direction
         return total
 
@@ -190,8 +201,8 @@ class TradingEnvironment(gym.Env):
         penalty = 0.0
         close = self.input_data[self.current_step, self.col_close]
         for i in range(self.num_trades):
-            if self.trades[i, 0] != 0:
-                direction, entry_price, sl, tp = self.trades[i]
+            if self.trades_state[i, 0] != 0:
+                direction, entry_price, sl, tp = self.trades_state[i]
                 unrealised = (close - entry_price) * direction
                 if unrealised < 0:
                     penalty -= self.pnl_scale * 0.05

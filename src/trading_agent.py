@@ -67,7 +67,7 @@ class TradingAgent:
         num_actions = env.action_space.n
 
         num_states = env.observation_space.shape[0]
-
+        win_rate_per_episode = []
         rewards_per_episode = []
         sharpe_per_episode = []
 
@@ -134,7 +134,7 @@ class TradingAgent:
             # Keep track of the rewards collected per step.
             rewards_per_episode.append(episode_reward)
             win_rate = env.tp_hits / max(1, env.tp_hits + env.sl_hits)
-
+            win_rate_per_episode.append(win_rate)
             episode_sharpe = env.calculate_sharpe_ratio()
             sharpe_per_episode.append(episode_sharpe)
 
@@ -156,7 +156,7 @@ class TradingAgent:
                 # Update graph every x seconds
                 current_time = datetime.now()
                 if current_time - last_graph_update_time > timedelta(seconds=10):
-                    self.save_graph(rewards_per_episode, epsilon_tracker, sharpe_per_episode, win_rate)
+                    self.save_graph(rewards_per_episode, epsilon_tracker, sharpe_per_episode, win_rate_per_episode)
                     last_graphf_update_time = current_time
 
                 # If enough experience has been collected

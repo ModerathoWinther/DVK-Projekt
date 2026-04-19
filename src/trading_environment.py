@@ -12,12 +12,7 @@ from action_space import Direction, ACTION_SPACE, HOLD_ACTION
 
 class TradingEnvironment(gym.Env):
 
-    # todo step: add closed trades to a list (we only need real profit)
-
-    # todo reset: calculate win rate etc from closed trades and put in new list of episode rewards.
-    #  Also, close trades that haven't hit sl/tp yet, profit being (price bought - close) * direction
-
-    # todo get_statistics: get list of episode rewards
+    # todo reset: close trades that haven't hit sl/tp yet, profit being (price bought - close) * direction
 
     def __init__(self, params):
         super().__init__()
@@ -65,6 +60,8 @@ class TradingEnvironment(gym.Env):
         self.trades_state = np.zeros((self.num_trades, 4), dtype=np.float32)
         self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
 
+        self.episode_results = []
+
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
             shape=(self.input_data.shape[1] + self.num_trades * 4,),
@@ -81,6 +78,11 @@ class TradingEnvironment(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+
+        episode_stats = self._calc_episode_stats()
+        self.episode_results.append(episode_stats)
+        closed_trades = []
+
         self.tp_hits = 0
         self.sl_hits = 0
         self.current_step = 0
@@ -153,7 +155,7 @@ class TradingEnvironment(gym.Env):
         return np.concatenate([current_md, flat_trades]).astype(np.float32)
 
     def _process_trades(self, high: float, low: float) -> tuple[float, int]:
-        realized_pnl = 0.0
+        total_realized_pnl = 0.0
         closed = 0
         for i in range(self.num_trades):
             if self.trades_state[i, 0] == 0:
@@ -166,7 +168,8 @@ class TradingEnvironment(gym.Env):
 
             if hit_sl or hit_tp:
                 pnl = (tp - entry_price) * direction if hit_tp else (sl - entry_price) * direction
-                realized_pnl += pnl - self.transaction_cost * abs(entry_price)
+                realized_pnl = pnl - self.transaction_cost * abs(entry_price)
+                total_realized_pnl += realized_pnl
                 self.trades_state[i] = [0, 0, 0, 0]
                 self.open_slots += 1
                 closed += 1
@@ -176,7 +179,7 @@ class TradingEnvironment(gym.Env):
                     self.sl_hits += 1
                 self.closed_trades.append(realized_pnl)
 
-        return realized_pnl, closed
+        return total_realized_pnl, closed
 
     def _unrealized_pnl(self, current_price: float) -> float:
         total = 0.0
@@ -218,6 +221,58 @@ class TradingEnvironment(gym.Env):
                     penalty -= self.pnl_scale * 0.05
         return penalty
 
+    def _calc_episode_stats(self):
+        closed_trades = len(self.closed_trades)
+        total_profit = 0
+        total_gain = 0
+        total_loss = 0
+        num_gain = 0
+        num_loss = 0
+        avg_gain = 0.0
+        avg_loss = 0.0
+        profit_factor = 0.0
+
+        for pnl in self.closed_trades:
+            total_profit += pnl
+            if pnl > 0:
+                num_gain += 1
+                total_gain += pnl
+            if pnl < 0:
+                num_loss += 1
+                total_loss += pnl
+
+        if closed_trades > 0:
+            win_rate = num_gain / closed_trades
+            loss_rate = num_loss / closed_trades
+
+        if num_gain > 0:
+            avg_gain = total_gain / num_gain
+        if num_loss > 0:
+            avg_loss = total_loss / num_loss
+        expectancy = (win_rate * avg_gain) - (loss_rate * avg_loss)
+
+        if total_loss != 0:
+            profit_factor = total_gain / total_loss
+
+        peak = max(self.equity_curve)
+        trough = min(self.equity_curve)
+
+        max_drawdown = (trough - peak) / peak
+        sharpe_ratio = self.calculate_sharpe_ratio()
+
+        stats = {
+            "win_rate": win_rate,
+            "loss_rate": loss_rate,
+            "profit_factor": profit_factor,
+            "expectancy": expectancy,
+            "max_drawdown": max_drawdown,
+            "sharpe_ratio": sharpe_ratio,
+        }
+        return stats
+
+    def get_episode_stats(self):
+        return self.episode_results
+
 if __name__ == "__main__":
     with open('../hyperparameters.yml', 'r') as file:
         all_hyperparameter_sets = yaml.safe_load(file)
@@ -227,6 +282,8 @@ if __name__ == "__main__":
     env = TradingEnvironment(env_make_params)
 
     # Test here
+    env.step(1)
+    env.step(1)
     env.step(1)
     print(env.trades_state)
     print(env._get_observation())
@@ -239,3 +296,6 @@ if __name__ == "__main__":
             print(obs_last)
             print(reward)
             print(env.closed_trades)
+
+    env.reset()
+    print(env.get_episode_stats())

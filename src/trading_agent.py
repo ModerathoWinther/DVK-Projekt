@@ -35,6 +35,7 @@ class TradingAgent:
         self.network_sync_rate = hyperparameters['network_sync_rate']
         self.replay_memory_size = hyperparameters['replay_memory_size']
         self.mini_batch_size = hyperparameters['mini_batch_size']
+        self.min_buffer_fill = hyperparameters.get('min_buffer_fill', self.mini_batch_size)
         self.epsilon_init = hyperparameters['epsilon_init']
         self.epsilon_decay = hyperparameters['epsilon_decay']
         self.epsilon_min = hyperparameters['epsilon_min']
@@ -125,7 +126,7 @@ class TradingAgent:
                     memory.append((state, action, new_state, reward, terminated))
                     step_count += 1
                     # Decay epsilon after each step if memory is large enough.
-                    if len(memory) > self.mini_batch_size:
+                    if len(memory) > self.min_buffer_fill:
                         epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)
                         epsilon_tracker.append(epsilon)
 
@@ -140,7 +141,7 @@ class TradingAgent:
 
             # Save model when new best reward is obtained.
             if is_training:
-                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}\t|  (episode reward: {episode_reward:.1f})\t|  equity diff: {(env.initial_capital - env.current_equity):.3f}"
+                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  n steps: {step_count}\t|  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}\t|  (episode reward: {episode_reward:.1f})"
                 if episode_sharpe > best_sharpe:
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
@@ -170,12 +171,14 @@ class TradingAgent:
                         step_count = 0
             print(log_message)
 
-    def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode, win_rate):
+    def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode, win_rate_per_episode):
         fig = plt.figure(figsize=(15, 10))
 
         mean_rewards = np.array([np.mean(rewards_per_episode[max(0, x - 99):x + 1])
                                  for x in range(len(rewards_per_episode))])
         mean_sharpe = np.array([np.mean(sharpe_per_episode[max(0, x - 99):x + 1])
+                                for x in range(len(sharpe_per_episode))])
+        mean_win_rate = np.array([np.mean(win_rate_per_episode[max(0, x - 99):x + 1])
                                 for x in range(len(sharpe_per_episode))])
 
         plt.subplot(221)
@@ -185,8 +188,9 @@ class TradingAgent:
 
         plt.subplot(222)
         plt.ylabel('Epsilon')
-        plt.xlabel('Steps')
+        plt.xlabel('Episodes')
         plt.plot(epsilon_history, color='orange')
+        plt.axhline(y=0.05  , color='black', linestyle='--', label='min epsilon')
 
         plt.subplot(223)
         plt.ylabel('Mean Sharpe (100-ep MA)')
@@ -196,7 +200,7 @@ class TradingAgent:
         plt.subplot(224)
         plt.ylabel('Win Rate')
         plt.xlabel('Episodes')
-        plt.plot(win_rate, color='red')
+        plt.plot(mean_win_rate, color='red')
         plt.axhline(y=0.333, color='black', linestyle='--', label='Break-even')
         plt.legend()
 

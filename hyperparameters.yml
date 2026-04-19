@@ -7,19 +7,19 @@ midas-train1:
     rsi: true
     initial_capital: 10000.0
     transaction_cost: 0.0002
+    episode_length: 5000
   env_id: 'midas-train1'
-  state_dim: 12
-  action_dim: 19
   learning_rate_a: 0.0002
-  epsilon_init: 1
-  epsilon_decay: 0.999999
+  epsilon_init: 1.0
+  epsilon_decay: 0.99999
   epsilon_min: 0.05
-  discount_factor_g: 0.99
-  fc1_nodes: 512
-  replay_memory_size: 100000
-  network_sync_rate: 10000
-  enable_double_dqn: True
-  enable_dueling_dqn: True
+  discount_factor_g: 0.999
+  fc1_nodes: 128
+  replay_memory_size: 500000
+  network_sync_rate: 5000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
   mini_batch_size: 128
   stop_on_reward: 99999999
 

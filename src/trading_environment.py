@@ -24,6 +24,7 @@ class TradingEnvironment(gym.Env):
         self.atr = params.get('atr')
         self.macd = params.get('macd')
         self.rsi = params.get('rsi')
+        self.episode_length = params.get('episode_length')
 
         self.input_data, self.prices = init_state.run(**params)
 
@@ -46,9 +47,17 @@ class TradingEnvironment(gym.Env):
         self.col_low = 1
         self.col_close = 2
 
-        self._recent_returns = deque(maxlen=92)
+        self.data_length = len(self.input_data)
+
+        if self.episode_length is None or self.episode_length >= self.data_length:
+            self.episode_length = self.data_length - 1
+            self.max_start = 0
+        else:
+            self.max_start = self.data_length - self.episode_length - 1
+
         self.current_step = 0
-        self.max_steps = len(self.input_data) - 1
+        self.episode_end = self.episode_length
+
         self.pnl_mean_estimate, self.pnl_scale = self._calc_pnl_mean_and_scale()
         self.tp_hits = self.sl_hits = 0
 
@@ -69,6 +78,7 @@ class TradingEnvironment(gym.Env):
         )
 
         self.action_space = spaces.Discrete(len(ACTION_SPACE))
+        print(f"\n\nepisode_length={self.episode_length}, max_start={self.max_start}, data_length={self.data_length}\n\n")
 
         print(
             f"Close range: {self.input_data[:, self.col_close].min():.4f} to {self.input_data[:, self.col_close].max():.4f}")
@@ -78,6 +88,11 @@ class TradingEnvironment(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+
+        if self.split == 'train' and self.max_start > 0:
+            self.current_step = np.random.randint(0, self.max_start)
+        else:
+            self.current_step = 0
 
         episode_stats = self._calc_episode_stats()
         self.episode_results.append(episode_stats)
@@ -136,8 +151,9 @@ class TradingEnvironment(gym.Env):
         self.current_equity += realized_pnl
         self.equity_curve.append(self.current_equity)
         self.current_step += 1
+        terminated = self.current_step >= self.episode_end
 
-        return self._get_observation(), reward, self.current_step >= self.max_steps, False, {}
+        return self._get_observation(), reward, terminated, False, {}
 
     def _get_observation(self):
         current_prices = self.prices[self.current_step]

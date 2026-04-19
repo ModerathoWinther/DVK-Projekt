@@ -64,7 +64,7 @@ class TradingEnvironment(gym.Env):
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(self.input_data.shape[1] + self.num_trades * 4,),
+            shape=(self.input_data.shape[1] + self.num_trades * 3,),
             dtype=np.float32
         )
 
@@ -228,6 +228,8 @@ class TradingEnvironment(gym.Env):
         total_loss = 0
         num_gain = 0
         num_loss = 0
+        win_rate = 0.0
+        loss_rate = 0.0
         avg_gain = 0.0
         avg_loss = 0.0
         profit_factor = 0.0

@@ -147,7 +147,7 @@ class TradingEnvironment(gym.Env):
             if(direction != 0):
                 tp_dist = abs(tp - close)
                 sl_dist = abs(sl - close)
-                self.trades_obs[i] = direction, tp_dist, sl_dist
+                self.trades_obs[i] = direction, sl_dist, tp_dist
 
         flat_trades = self.trades_obs.flatten()
         return np.concatenate([current_md, flat_trades]).astype(np.float32)

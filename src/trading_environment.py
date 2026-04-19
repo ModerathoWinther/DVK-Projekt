@@ -12,6 +12,13 @@ from action_space import Direction, ACTION_SPACE, HOLD_ACTION
 
 class TradingEnvironment(gym.Env):
 
+    # todo step: add closed trades to a list (we only need real profit)
+
+    # todo reset: calculate win rate etc from closed trades and put in new list of episode rewards.
+    #  Also, close trades that haven't hit sl/tp yet, profit being (price bought - close) * direction
+
+    # todo get_statistics: get list of episode rewards
+
     def __init__(self, params):
         super().__init__()
         self.split = params.get('split')
@@ -53,6 +60,7 @@ class TradingEnvironment(gym.Env):
         # Portfolio state
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
+        self.closed_trades = []
         self.open_slots = self.num_trades
         self.trades_state = np.zeros((self.num_trades, 4), dtype=np.float32)
         self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
@@ -136,11 +144,12 @@ class TradingEnvironment(gym.Env):
 
         for i in range(len(self.trades_state)):
             direction, _, sl, tp = self.trades_state[i]
-            tp_dist = abs(tp - close)
-            sl_dist = abs(sl - close)
-            self.trades_obs[i] = direction, tp_dist, sl_dist
+            if(direction != 0):
+                tp_dist = abs(tp - close)
+                sl_dist = abs(sl - close)
+                self.trades_obs[i] = direction, tp_dist, sl_dist
 
-        flat_trades = self.trades_state.flatten()
+        flat_trades = self.trades_obs.flatten()
         return np.concatenate([current_md, flat_trades]).astype(np.float32)
 
     def _process_trades(self, high: float, low: float) -> tuple[float, int]:
@@ -165,6 +174,7 @@ class TradingEnvironment(gym.Env):
                     self.tp_hits += 1
                 else:
                     self.sl_hits += 1
+                self.closed_trades.append(realized_pnl)
 
         return realized_pnl, closed
 
@@ -215,4 +225,17 @@ if __name__ == "__main__":
     env_make_params = hyperparameters.get('env_make_params', {})
 
     env = TradingEnvironment(env_make_params)
+
     # Test here
+    env.step(1)
+    print(env.trades_state)
+    print(env._get_observation())
+    obs = None
+    for i in range(1000):
+        obs_last = obs
+        obs, reward, _, _, _ = env.step(HOLD_ACTION.index)
+        if(reward != 0):
+            print(i)
+            print(obs_last)
+            print(reward)
+            print(env.closed_trades)

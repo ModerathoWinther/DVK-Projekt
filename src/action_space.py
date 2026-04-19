@@ -17,8 +17,8 @@ class Action:
     index: int
 
 
-SL_LEVELS = [0.020, 0.040, 0.080]
-TP_LEVELS = [0.040, 0.080, 0.160]
+SL_LEVELS = [0.010, 0.020, 0.040]
+TP_LEVELS = [0.020, 0.040, 0.080]
 HOLD_ACTION = Action(Direction.HOLD, None, None, 0)
 
 i = 1

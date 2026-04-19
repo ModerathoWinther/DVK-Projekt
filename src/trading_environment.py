@@ -81,7 +81,7 @@ class TradingEnvironment(gym.Env):
 
         episode_stats = self._calc_episode_stats()
         self.episode_results.append(episode_stats)
-        closed_trades = []
+        self.closed_trades = []
 
         self.tp_hits = 0
         self.sl_hits = 0

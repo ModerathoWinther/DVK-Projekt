@@ -2,10 +2,12 @@ from collections import deque
 
 import gymnasium as gym
 import numpy as np
+import yaml
 from gymnasium import spaces
 
+import action_space
 import init_state
-from action_space import Direction, ACTION_SPACE
+from action_space import Direction, ACTION_SPACE, HOLD_ACTION
 
 
 class TradingEnvironment(gym.Env):
@@ -111,8 +113,8 @@ class TradingEnvironment(gym.Env):
 
         act = ACTION_SPACE[action]
         if act.direction != Direction.HOLD and self.open_slots > 0:
-            sl = close - act.direction.value * act.sl
-            tp = close + act.direction.value * act.tp
+            sl = close - act.direction.value * (close * act.sl)
+            tp = close + act.direction.value * (close * act.tp)
             for i in range(self.num_trades):
                 if self.trades_state[i, 0] == 0:
                     self.trades_state[i] = [act.direction.value, close, sl, tp]
@@ -205,3 +207,12 @@ class TradingEnvironment(gym.Env):
                 if unrealised < 0:
                     penalty -= self.pnl_scale * 0.05
         return penalty
+
+if __name__ == "__main__":
+    with open('../hyperparameters.yml', 'r') as file:
+        all_hyperparameter_sets = yaml.safe_load(file)
+        hyperparameters = all_hyperparameter_sets["midas-train1"]
+    env_make_params = hyperparameters.get('env_make_params', {})
+
+    env = TradingEnvironment(env_make_params)
+    # Test here

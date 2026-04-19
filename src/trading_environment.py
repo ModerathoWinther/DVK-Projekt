@@ -110,24 +110,23 @@ class TradingEnvironment(gym.Env):
     def calculate_sharpe_ratio(self) -> float:
         if len(self.equity_curve) < 2:
             return 0.0
-
         equity = np.array(self.equity_curve)
+        if np.any(equity <= 0):
+            return -999.0
         returns = np.diff(equity) / equity[:-1]
-
         active_returns = returns[returns != 0.0]
-
         if len(active_returns) < 2:
             return 0.0
-
-        mean_ret = np.mean(active_returns)
         std_ret = np.std(active_returns, ddof=1)
-
         if std_ret < 1e-8:
             return 0.0
+        mean_ret = np.mean(active_returns)
 
-        periods_per_year = 252 * 92
-        sharpe = (mean_ret - 0.0) / std_ret * np.sqrt(periods_per_year)
+        total_bars = len(self.equity_curve)
+        n_trades = len(active_returns)
+        trades_per_year = (n_trades / total_bars) * (252 * 92)
 
+        sharpe = (mean_ret / std_ret) * np.sqrt(trades_per_year)
         return float(sharpe)
 
     def step(self, action: int):

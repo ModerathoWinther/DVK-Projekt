@@ -12,8 +12,6 @@ from action_space import Direction, ACTION_SPACE, HOLD_ACTION
 
 class TradingEnvironment(gym.Env):
 
-    # todo reset: close trades that haven't hit sl/tp yet, profit being (price bought - close) * direction
-
     def __init__(self, params):
         super().__init__()
         self.split = params.get('split')

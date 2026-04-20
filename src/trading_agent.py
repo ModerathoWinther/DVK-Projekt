@@ -134,9 +134,10 @@ class TradingAgent:
 
             # Keep track of the rewards collected per step.
             rewards_per_episode.append(episode_reward)
-            win_rate = env.tp_hits / max(1, env.tp_hits + env.sl_hits)
+            stats = env._calc_episode_stats()
+            win_rate = stats['win_rate']
             win_rate_per_episode.append(win_rate)
-            episode_sharpe = env.calculate_sharpe_ratio()
+            episode_sharpe = stats['sharpe_ratio']
             sharpe_per_episode.append(episode_sharpe)
 
             # Save model when new best reward is obtained.
@@ -170,7 +171,8 @@ class TradingAgent:
                         target_dqn.load_state_dict(policy_dqn.state_dict())
                         step_count = 0
             elif self.split == 'test':
-                env.get_episode_stats()
+                print("reward", episode_reward)
+                print(env.get_episode_stats())
     def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode, win_rate_per_episode):
         fig = plt.figure(figsize=(15, 10))
 

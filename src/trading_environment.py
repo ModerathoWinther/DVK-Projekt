@@ -78,7 +78,6 @@ class TradingEnvironment(gym.Env):
         print(
             f"Close range: {self.input_data[:, self.col_close].min():.4f} to {self.input_data[:, self.col_close].max():.4f}")
         print(f"Median close: {np.median(self.input_data[:, self.col_close]):.4f}")
-        print(f"pnl_mean={self.pnl_mean_estimate:.6f}, pnl_scale={self.pnl_scale:.6f}")
         print(f"SL distances: {[a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]}")
 
     def reset(self, seed=None, options=None):
@@ -89,8 +88,9 @@ class TradingEnvironment(gym.Env):
         else:
             self.current_step = 0
 
-        episode_stats = self._calc_episode_stats()
-        self.episode_results.append(episode_stats)
+        if len(self.closed_trades) > 0:
+            episode_stats = self._calc_episode_stats()
+            self.episode_results.append(episode_stats)
         self.closed_trades = []
 
         self.current_step = 0
@@ -154,7 +154,7 @@ class TradingEnvironment(gym.Env):
                     realized_pnl = pnl - self.transaction_cost * entry_price
                     total_realized_pnl += realized_pnl
                     self.closed_trades.append(realized_pnl)
-            self.current_equity += realized_pnl
+            self.current_equity += total_realized_pnl
             reward += total_realized_pnl
 
         self.equity_curve.append(self.current_equity)
@@ -218,7 +218,7 @@ class TradingEnvironment(gym.Env):
                 total_gain += pnl
             if pnl < 0:
                 num_loss += 1
-                total_loss += pnl
+                total_loss += pnl * -1
 
         if closed_trades > 0:
             win_rate = num_gain / closed_trades

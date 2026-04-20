@@ -56,9 +56,6 @@ class TradingEnvironment(gym.Env):
         self.current_step = 0
         self.episode_end = self.episode_length
 
-        self.pnl_mean_estimate, self.pnl_scale = self._calc_pnl_mean_and_scale()
-        self.tp_hits = self.sl_hits = 0
-
         # Portfolio state
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
@@ -96,8 +93,6 @@ class TradingEnvironment(gym.Env):
         self.episode_results.append(episode_stats)
         self.closed_trades = []
 
-        self.tp_hits = 0
-        self.sl_hits = 0
         self.current_step = 0
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
@@ -146,12 +141,12 @@ class TradingEnvironment(gym.Env):
         reward = realized_pnl
 
         self.current_equity += realized_pnl
-        self.equity_curve.append(self.current_equity)
         self.current_step += 1
         terminated = self.current_step >= self.episode_end
 
         if terminated:
             total_realized_pnl = 0
+            realized_pnl = 0
             for i in range(self.num_trades):
                 direction, entry_price, _, _ = self.trades_state[i]
                 if direction != 0:
@@ -159,9 +154,10 @@ class TradingEnvironment(gym.Env):
                     realized_pnl = pnl - self.transaction_cost * entry_price
                     total_realized_pnl += realized_pnl
                     self.closed_trades.append(realized_pnl)
+            self.current_equity += realized_pnl
             reward += total_realized_pnl
 
-
+        self.equity_curve.append(self.current_equity)
         return self._get_observation(), reward, terminated, False, {}
 
     def _get_observation(self):
@@ -198,53 +194,9 @@ class TradingEnvironment(gym.Env):
                 self.trades_state[i] = [0, 0, 0, 0]
                 self.open_slots += 1
                 closed += 1
-                if hit_tp:
-                    self.tp_hits += 1
-                else:
-                    self.sl_hits += 1
                 self.closed_trades.append(realized_pnl)
 
         return total_realized_pnl, closed
-
-    def _unrealized_pnl(self, current_price: float) -> float:
-        total = 0.0
-        for i in range(self.num_trades):
-            if self.trades_state[i, 0] != 0:
-                direction, entry_price, sl, tp = self.trades_state[i]
-                total += (current_price - entry_price) * direction
-        return total
-
-    def _sharpe_reward(self, pnl: float) -> float:
-        if pnl == 0.0 or self.pnl_scale < 1e-8:
-            return 0.0
-        normalised = (pnl - self.pnl_mean_estimate) / self.pnl_scale
-        return float(np.clip(normalised, -10.0, 10.0))
-
-    def _calc_pnl_mean_and_scale(self) -> tuple[float, float]:
-        non_hold = [a for a in ACTION_SPACE if a.direction != Direction.HOLD]
-        avg_tp = float(np.mean([a.tp for a in non_hold]))
-        avg_sl = float(np.mean([a.sl for a in non_hold]))
-
-        assumed_win_rate = 0.50
-        expected_cost = self.transaction_cost * float(
-            np.median(np.abs(self.input_data[:, self.col_close]))
-        )
-
-        pnl_mean  = assumed_win_rate * avg_tp - (1 - assumed_win_rate) * avg_sl - expected_cost
-        pnl_scale = assumed_win_rate * avg_tp + (1 - assumed_win_rate) * avg_sl
-
-        return pnl_mean, pnl_scale
-
-    def _holding_penalty(self) -> float:
-        penalty = 0.0
-        close = self.input_data[self.current_step, self.col_close]
-        for i in range(self.num_trades):
-            if self.trades_state[i, 0] != 0:
-                direction, entry_price, sl, tp = self.trades_state[i]
-                unrealised = (close - entry_price) * direction
-                if unrealised < 0:
-                    penalty -= self.pnl_scale * 0.05
-        return penalty
 
     def _calc_episode_stats(self):
         closed_trades = len(self.closed_trades)

@@ -4,6 +4,7 @@ import gymnasium as gym
 import numpy as np
 import yaml
 from gymnasium import spaces
+import torch
 
 import action_space
 import init_state
@@ -11,7 +12,6 @@ from action_space import Direction, ACTION_SPACE, HOLD_ACTION
 
 
 class TradingEnvironment(gym.Env):
-
     def __init__(self, params):
         super().__init__()
         self.split = params.get('split')
@@ -57,9 +57,8 @@ class TradingEnvironment(gym.Env):
         self.episode_end = self.episode_length
 
         # Portfolio state
-        self.current_equity = self.initial_capital
-        self.equity_curve = [self.initial_capital]
         self.closed_trades = []
+        self.returns = []
         self.open_slots = self.num_trades
         self.trades_state = np.zeros((self.num_trades, 4), dtype=np.float32)
         self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
@@ -73,6 +72,7 @@ class TradingEnvironment(gym.Env):
         )
 
         self.action_space = spaces.Discrete(len(ACTION_SPACE))
+
         print(f"\n\nepisode_length={self.episode_length}, max_start={self.max_start}, data_length={self.data_length}\n\n")
 
         print(
@@ -92,33 +92,24 @@ class TradingEnvironment(gym.Env):
             episode_stats = self._calc_episode_stats()
             self.episode_results.append(episode_stats)
         self.closed_trades = []
+        self.returns = []
 
         self.current_step = 0
-        self.current_equity = self.initial_capital
-        self.equity_curve = [self.initial_capital]
         self.open_slots = self.num_trades
         self.trades_state.fill(0.0)
         return self._get_observation(), {}
 
     def calculate_sharpe_ratio(self) -> float:
-        if len(self.equity_curve) < 2:
+        if len(self.returns) < 10:
             return 0.0
-        equity = np.array(self.equity_curve)
-        if np.any(equity <= 0):
-            return -999.0
-        returns = np.diff(equity) / equity[:-1]
-        active_returns = returns[returns != 0.0]
-        if len(active_returns) < 2:
-            return 0.0
-        std_ret = np.std(active_returns, ddof=1)
+
+        returns = np.array(self.returns)
+        std_ret = np.std(returns, ddof=1)
         if std_ret < 1e-8:
             return 0.0
-        mean_ret = np.mean(active_returns)
+        mean_ret = np.mean(returns)
 
-        total_bars = len(self.equity_curve)
-        n_trades = len(active_returns)
-        trades_per_year = (n_trades / total_bars) * (252 * 92)
-
+        trades_per_year = ((len(self.closed_trades) / self.current_step) * (252 * 92))
         sharpe = (mean_ret / std_ret) * np.sqrt(trades_per_year)
         return float(sharpe)
 
@@ -129,6 +120,9 @@ class TradingEnvironment(gym.Env):
         realized_pnl, _ = self._process_trades(high, low)
 
         act = ACTION_SPACE[action]
+        if act.direction != 0 and self.open_slots <= 0:
+            raise Exception('Not enough open_slots')
+
         if act.direction != Direction.HOLD and self.open_slots > 0:
             sl = close - act.direction.value * (close * act.sl)
             tp = close + act.direction.value * (close * act.tp)
@@ -140,24 +134,12 @@ class TradingEnvironment(gym.Env):
 
         reward = realized_pnl
 
-        self.current_equity += realized_pnl
         self.current_step += 1
         terminated = self.current_step >= self.episode_end
 
         if terminated:
-            total_realized_pnl = 0
-            realized_pnl = 0
-            for i in range(self.num_trades):
-                direction, entry_price, _, _ = self.trades_state[i]
-                if direction != 0:
-                    pnl = (entry_price - close) * direction
-                    realized_pnl = pnl - self.transaction_cost * entry_price
-                    total_realized_pnl += realized_pnl
-                    self.closed_trades.append(realized_pnl)
-            self.current_equity += total_realized_pnl
-            reward += total_realized_pnl
+            reward += self._calc_termination(close)
 
-        self.equity_curve.append(self.current_equity)
         return self._get_observation(), reward, terminated, False, {}
 
     def _get_observation(self):
@@ -189,12 +171,13 @@ class TradingEnvironment(gym.Env):
 
             if hit_sl or hit_tp:
                 pnl = (tp - entry_price) * direction if hit_tp else (sl - entry_price) * direction
-                realized_pnl = pnl - self.transaction_cost * abs(entry_price)
+                realized_pnl = pnl - self.transaction_cost * entry_price
                 total_realized_pnl += realized_pnl
                 self.trades_state[i] = [0, 0, 0, 0]
                 self.open_slots += 1
                 closed += 1
                 self.closed_trades.append(realized_pnl)
+                self.returns.append(realized_pnl / entry_price)
 
         return total_realized_pnl, closed
 
@@ -233,8 +216,8 @@ class TradingEnvironment(gym.Env):
         if total_loss != 0:
             profit_factor = total_gain / total_loss
 
-        peak = max(self.equity_curve)
-        trough = min(self.equity_curve)
+        peak = max(self.closed_trades)
+        trough = min(self.closed_trades)
 
         max_drawdown = (trough - peak) / peak
         sharpe_ratio = self.calculate_sharpe_ratio()
@@ -253,6 +236,21 @@ class TradingEnvironment(gym.Env):
     def get_episode_stats(self):
         return self.episode_results
 
+    def _calc_termination(self, close):
+        total_realized_pnl = 0
+        for i in range(self.num_trades):
+            realized_pnl = 0
+            direction, entry_price, _, _ = self.trades_state[i]
+            if direction != 0:
+                pnl = (close - entry_price) * direction
+                realized_pnl = pnl - self.transaction_cost * entry_price
+                self.closed_trades.append(realized_pnl)
+                self.returns.append(realized_pnl / entry_price)
+                total_realized_pnl += realized_pnl
+        reward = total_realized_pnl
+        return reward
+
+
 if __name__ == "__main__":
     with open('../hyperparameters.yml', 'r') as file:
         all_hyperparameter_sets = yaml.safe_load(file)
@@ -263,8 +261,10 @@ if __name__ == "__main__":
 
     # Test here
     env.step(1)
-    env.step(1)
-    env.step(1)
+    env.step(7)
+    env.step(2)
+    env.step(12)
+    env.step(3)
     print(env.trades_state)
     print(env._get_observation())
     obs = None

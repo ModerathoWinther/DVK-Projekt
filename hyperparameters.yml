@@ -23,29 +23,28 @@ midas-train1:
   mini_batch_size: 128
   stop_on_reward: 99999999
 
-midas-train2:
+midas-backtest1:
   env_make_params:
-    split: "test"
+    split: "backtest"
     num_trades: 3
     atr: true
     macd: true
     rsi: true
     initial_capital: 100000.0
     transaction_cost: 0.0002
-  env_id: 'midas-train1'
-  state_dim: 12
-  action_dim: 19
-  learning_rate_a: 0.001
-  epsilon_init: 1
-  epsilon_decay: 0.995
+  env_id: 'midas-backtest1'
+  learning_rate_a: 0.0002
+  epsilon_init: 1.0
+  epsilon_decay: 0.99999
   epsilon_min: 0.05
-  discount_factor_g: 0.99
-  fc1_nodes: 512
-  replay_memory_size: 100000
+  discount_factor_g: 0.999
+  fc1_nodes: 128
+  replay_memory_size: 500000
   network_sync_rate: 5000
-  enable_double_dqn: True
-  enable_dueling_dqn: True
-  mini_batch_size: 64
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 128
   stop_on_reward: 99999999
 
 

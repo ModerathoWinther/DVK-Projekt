@@ -43,15 +43,15 @@ class TradingAgent:
         self.fc1_nodes = hyperparameters['fc1_nodes']
         self.indicator_columns = 0
         self.parameters = hyperparameters['env_make_params']
-
+        self.split = self.parameters['split']
         self.enable_double_dqn = hyperparameters['enable_double_dqn']
         self.enable_dueling_dqn = hyperparameters['enable_dueling_dqn']
-
+        print(self.split)
         self.loss_fn = nn.MSELoss()
         self.optimizer = None
 
         self.LOG_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.log')
-        self.MODEL_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.pt')
+        self.MODEL_FILE = os.path.join(RESULTS_DIR, f'{self.env_id}.pt')
         self.GRAPH_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.png')
 
     def run(self, is_training=True):
@@ -169,8 +169,8 @@ class TradingAgent:
                     if step_count > self.network_sync_rate:
                         target_dqn.load_state_dict(policy_dqn.state_dict())
                         step_count = 0
-            print(log_message)
-
+            elif self.split == 'test':
+                env.get_episode_stats()
     def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode, win_rate_per_episode):
         fig = plt.figure(figsize=(15, 10))
 

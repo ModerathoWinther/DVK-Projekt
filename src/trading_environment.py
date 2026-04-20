@@ -152,6 +152,18 @@ class TradingEnvironment(gym.Env):
         self.current_step += 1
         terminated = self.current_step >= self.episode_end
 
+        if terminated:
+            total_realized_pnl = 0
+            for i in range(self.num_trades):
+                direction, entry_price, _, _ = self.trades_state[i]
+                if direction != 0:
+                    pnl = (entry_price - close) * direction
+                    realized_pnl = pnl - self.transaction_cost * entry_price
+                    total_realized_pnl += realized_pnl
+                    self.closed_trades.append(realized_pnl)
+            reward += total_realized_pnl
+
+
         return self._get_observation(), reward, terminated, False, {}
 
     def _get_observation(self):
@@ -278,6 +290,7 @@ class TradingEnvironment(gym.Env):
         sharpe_ratio = self.calculate_sharpe_ratio()
 
         stats = {
+            "closed_trades": len(self.closed_trades),
             "win_rate": win_rate,
             "loss_rate": loss_rate,
             "profit_factor": profit_factor,

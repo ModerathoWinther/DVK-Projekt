@@ -9,9 +9,16 @@ import data_process as dp
 from trading_environment import TradingEnvironment
 
 SPLIT = "unit_test"
+
 HOLD_ACTION = 0
 BUY_ACTION = 1
 SELL_ACTION = 2
+
+PARAM_TCOST = 0.0002
+# Test always trades on entry_price = 100
+TRANSACTION_COST = PARAM_TCOST * 100
+TP_WIN = 2
+TP_LOSS = -1
 
 PARAMS = {
     "split": SPLIT,
@@ -42,11 +49,6 @@ class TestTradingEnvironment(unittest.TestCase):
     def test_environment_episode(self):
         env = self.env
 
-        # Test always trades on entry_price = 100
-        transaction_cost = env.transaction_cost * 100
-        tp_win = 2
-        tp_loss = -1
-
         # Buy, hit tp
         env.step(HOLD_ACTION)
         env.step(BUY_ACTION)
@@ -54,7 +56,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert reward == tp_win - transaction_cost
+        assert reward == TP_WIN - TRANSACTION_COST
 
         # Buy, hit sl
         env.step(BUY_ACTION)
@@ -62,7 +64,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert reward == tp_loss - transaction_cost
+        assert reward == TP_LOSS - TRANSACTION_COST
 
         # Sell, hit tp
         env.step(SELL_ACTION)
@@ -70,7 +72,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert reward == tp_win - transaction_cost
+        assert reward == TP_WIN - TRANSACTION_COST
 
         # Sell, hit sl
         env.step(SELL_ACTION)
@@ -78,7 +80,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert reward == tp_loss - transaction_cost
+        assert reward == TP_LOSS - TRANSACTION_COST
 
         # Buy, hit tp, with slippage
         env.step(BUY_ACTION)
@@ -99,7 +101,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         _, reward, terminated, _, _ = env.step(HOLD_ACTION)
         assert terminated == True
-        assert_almost_equal(reward, 0.5 - transaction_cost)
+        assert_almost_equal(reward, 0.5 - TRANSACTION_COST)
 
         # todo check episode stats
         env.reset()
@@ -111,6 +113,16 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(BUY_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert reward == tp_loss - transaction_cost
+        assert reward == TP_LOSS - TRANSACTION_COST
 
-        # todo multiple trades at once
+    def test_multiple_trades(self):
+        env = self.env
+
+        env.step(BUY_ACTION)
+        env.step(BUY_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)
+        _, reward, _, _, _ = env.step(HOLD_ACTION)
+        assert reward == (TP_WIN * 2) - (TRANSACTION_COST * 2)
+        assert len(env.closed_trades) == 2

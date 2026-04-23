@@ -5,10 +5,8 @@ import numpy as np
 import yaml
 from gymnasium import spaces
 
-import action_space
 import init_state
-from action_space import Direction, ACTION_SPACE, HOLD_ACTION
-
+from action_space import Direction, ACTION_SPACE, HOLD_ACTION, UNIT_TEST_ACTION_SPACE
 
 class TradingEnvironment(gym.Env):
 
@@ -23,6 +21,11 @@ class TradingEnvironment(gym.Env):
         self.macd = params.get('macd')
         self.rsi = params.get('rsi')
         self.episode_length = params.get('episode_length')
+
+        if params.get("unit_test"):
+            self.action_list = UNIT_TEST_ACTION_SPACE
+        else:
+            self.action_list = ACTION_SPACE
 
         self.input_data, self.prices = init_state.run(**params)
 
@@ -41,9 +44,11 @@ class TradingEnvironment(gym.Env):
             self.col_rsi = col
             col += 1
 
-        self.col_high = 0
-        self.col_low = 1
-        self.col_close = 2
+
+        self.col_open = 0
+        self.col_high = 1
+        self.col_low = 2
+        self.col_close = 3
 
         self.data_length = len(self.input_data)
 
@@ -72,13 +77,13 @@ class TradingEnvironment(gym.Env):
             dtype=np.float32
         )
 
-        self.action_space = spaces.Discrete(len(ACTION_SPACE))
+        self.action_space = spaces.Discrete(len(self.action_list))
         print(f"\n\nepisode_length={self.episode_length}, max_start={self.max_start}, data_length={self.data_length}\n\n")
 
         print(
             f"Close range: {self.input_data[:, self.col_close].min():.4f} to {self.input_data[:, self.col_close].max():.4f}")
         print(f"Median close: {np.median(self.input_data[:, self.col_close]):.4f}")
-        print(f"SL distances: {[a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]}")
+        print(f"SL distances: {[a.sl for a in self.action_list if a.direction != Direction.HOLD]}")
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -125,16 +130,18 @@ class TradingEnvironment(gym.Env):
     def step(self, action: int):
         current_prices = self.prices[self.current_step]
         high, low, close = current_prices[self.col_high], current_prices[self.col_low], current_prices[self.col_close]
+        open = self.prices[self.current_step + 1][self.col_open]
 
         realized_pnl, _ = self._process_trades(high, low)
 
-        act = ACTION_SPACE[action]
+        act = self.action_list[action]
         if act.direction != Direction.HOLD and self.open_slots > 0:
-            sl = close - act.direction.value * (close * act.sl)
-            tp = close + act.direction.value * (close * act.tp)
+            entry_price = open
+            sl = entry_price - act.direction.value * (entry_price * act.sl)
+            tp = entry_price + act.direction.value * (entry_price * act.tp)
             for i in range(self.num_trades):
                 if self.trades_state[i, 0] == 0:
-                    self.trades_state[i] = [act.direction.value, close, sl, tp]
+                    self.trades_state[i] = [act.direction.value, entry_price, sl, tp]
                     self.open_slots -= 1
                     break
 
@@ -145,17 +152,9 @@ class TradingEnvironment(gym.Env):
         terminated = self.current_step >= self.episode_end
 
         if terminated:
-            total_realized_pnl = 0
-            realized_pnl = 0
-            for i in range(self.num_trades):
-                direction, entry_price, _, _ = self.trades_state[i]
-                if direction != 0:
-                    pnl = (entry_price - close) * direction
-                    realized_pnl = pnl - self.transaction_cost * entry_price
-                    total_realized_pnl += realized_pnl
-                    self.closed_trades.append(realized_pnl)
-            self.current_equity += total_realized_pnl
-            reward += total_realized_pnl
+            tr = self._calculate_terminated_reward()
+            self.current_equity += tr
+            reward += tr
 
         self.equity_curve.append(self.current_equity)
         return self._get_observation(), reward, terminated, False, {}
@@ -197,6 +196,9 @@ class TradingEnvironment(gym.Env):
                 self.closed_trades.append(realized_pnl)
 
         return total_realized_pnl, closed
+
+    def _calculate_terminated_reward(self):
+        return 0
 
     def _calc_episode_stats(self):
         closed_trades = len(self.closed_trades)

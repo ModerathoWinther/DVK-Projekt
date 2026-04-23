@@ -7,7 +7,7 @@ midas-train1:
     rsi: true
     initial_capital: 10000.0
     transaction_cost: 0.0002
-    price_columns: 5
+    data_format: "ohlcv"
     episode_length: 5000
   env_id: 'midas-train1'
   learning_rate_a: 0.0002
@@ -34,7 +34,7 @@ midas-train-wick:
     initial_capital: 10000.0
     transaction_cost: 0.0002
     episode_length: 5000
-    price_columns: 3
+    price_columns: 4
   env_id: 'midas-train-wick'
   learning_rate_a: 0.0002
   epsilon_init: 1.0

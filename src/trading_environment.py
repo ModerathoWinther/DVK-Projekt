@@ -98,7 +98,6 @@ class TradingEnvironment(gym.Env):
             self.episode_results.append(episode_stats)
         self.closed_trades = []
 
-        self.current_step = 0
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
         self.open_slots = self.num_trades

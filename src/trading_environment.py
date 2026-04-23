@@ -27,18 +27,8 @@ class TradingEnvironment(gym.Env):
         else:
             self.action_list = ACTION_SPACE
 
-        self.column_count = params.get('column_count')
+        self.data_format = params.get('data_format')
         self.input_data, self.prices = init_state.run(**params)
-
-        self.col_high_wick = 0
-        self.col_low_wick = 1
-        self.col_trend = 2
-        self.col_input_vol = 3
-        self.col_open, self.col_high, self.col_low, self.col_close, self.col_vol = range(5)
-        self.col_atr = 5
-        self.col_macd = 6
-        self.col_rsi = 9
-
         self.data_length = len(self.input_data)
 
         if self.episode_length is None or self.episode_length >= self.data_length:
@@ -46,18 +36,35 @@ class TradingEnvironment(gym.Env):
             self.max_start = 0
         else:
             self.max_start = self.data_length - self.episode_length - 1
-
-        self.visible_cols = [self.column_count]
-
-        if params.get('atr'):
-            self.visible_cols.append(self.col_atr)
-        if params.get('macd'):
-            self.visible_cols.extend([self.col_macd, self.col_macd + 1, self.col_macd + 2])
-        if params.get('rsi'):
-            self.visible_cols.append(self.col_rsi)
-
         self.current_step = 0
         self.episode_end = self.episode_length
+
+        self.base_cols = []
+        self.col_open = 0
+        self.col_high = 1
+        self.col_low = 2
+        self.col_close = 3
+        self.col_vol = 4
+
+
+        if self.data_format == 'ohlcv':
+            self.col_atr = 6
+            self.col_macd = 7
+            self.col_rsi = 9
+            base_cols = list(range(5))
+        else:
+            self.col_atr = 5
+            self.col_macd = 6
+            self.col_rsi = 8
+            base_cols = list(range(4))
+
+        self.visible_cols = list(base_cols)
+        if self.atr:
+            self.visible_cols.append(self.col_atr)
+        if self.macd:
+            self.visible_cols.extend([self.col_macd, self.col_macd + 1, self.col_macd + 2])
+        if self.rsi:
+            self.visible_cols.append(self.col_rsi)
 
         # Portfolio state
         self.current_equity = self.initial_capital
@@ -69,7 +76,7 @@ class TradingEnvironment(gym.Env):
 
         self.episode_results = []
 
-        num_obs_features = len(self.visible_cols) + (self.num_trades * 4)
+        num_obs_features = len(self.visible_cols) + (self.num_trades * 3)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
             shape=(num_obs_features,),
@@ -88,7 +95,7 @@ class TradingEnvironment(gym.Env):
             self.episode_end = self.current_step + self.episode_length
         else:
             self.current_step = 0
-            self.episode_end = self.max_start
+            self.episode_end = self.episode_length - 1
 
         if len(self.closed_trades) > 0:
             episode_stats = self._calc_episode_stats()
@@ -163,19 +170,10 @@ class TradingEnvironment(gym.Env):
         return self._get_observation(), reward, is_last_step, False, {}
 
     def _get_observation(self):
-        current_prices = self.prices[self.current_step]
-        close = current_prices[self.col_close]
-        current_md = self.input_data[self.current_step]
-
-        for i in range(len(self.trades_state)):
-            direction, _, sl, tp = self.trades_state[i]
-            if(direction != 0):
-                tp_dist = abs(tp - close)
-                sl_dist = abs(sl - close)
-                self.trades_obs[i] = direction, sl_dist, tp_dist
-
-        flat_trades = self.trades_obs.flatten()
-        return np.concatenate([current_md, flat_trades]).astype(np.float32)
+        return np.concatenate([
+            self.input_data[self.current_step][self.visible_cols],
+            self.trades_obs.flatten()
+        ]).astype(np.float32)
 
     def _process_trades(self, high: float, low: float) -> tuple[float, int]:
         total_realized_pnl = 0.0
@@ -200,11 +198,13 @@ class TradingEnvironment(gym.Env):
 
         return total_realized_pnl, closed
 
-    def _update_trades_obs(self, close: float) -> None:
+    def _update_trades_obs(self, current_price: float) -> None:
         for i in range(self.num_trades):
-            direction, _, sl, tp = self.trades_state[i]
+            direction, entry_price, sl, tp = self.trades_state[i]
             if direction != 0:
-                self.trades_obs[i] = [direction, abs(sl - close), abs(tp - close)]
+                sl_dist = abs(sl - current_price)
+                tp_dist = abs(tp - current_price)
+                self.trades_obs[i] = [direction, sl_dist, tp_dist]
             else:
                 self.trades_obs[i] = [0.0, 0.0, 0.0]
 
@@ -234,12 +234,12 @@ class TradingEnvironment(gym.Env):
                 continue
 
             direction, entry_price, _, _ = self.trades_state[i]
+
             pnl = (close - entry_price) * direction
             realized_pnl = pnl - self.transaction_cost * abs(entry_price)
             total_realized_pnl += realized_pnl
             self.trades_state[i] = [0, 0, 0, 0]
             self.closed_trades.append(realized_pnl)
-            print("realized_pnl ", realized_pnl, "close", close, "entry_price", entry_price)
 
         return total_realized_pnl
 

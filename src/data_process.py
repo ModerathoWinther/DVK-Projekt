@@ -55,7 +55,7 @@ def make_stationary(df: pd.DataFrame) -> pd.DataFrame:
     stationary = pd.DataFrame({
         "date": df["date"],
         "high_wick": df['high'] - df['open'],
-        "low_wick":  df['open'] - df['low'],
+        "low_wick": df['open'] - df['low'],
         "trend": df['close'] - df['open'],
         "volume": df['volume'],
     }, index=df.index)
@@ -121,15 +121,17 @@ def apply_price_zscore(df: pd.DataFrame, price_mean: pd.Series, price_std: pd.Se
 
 
 def save_candlesticks(df: pd.DataFrame, split) -> None:
-    candlestick = df.drop(df.index[:WARMUP_ROWS])
     os.makedirs(NORMAL_DIR, exist_ok=True)
-    candlestick.to_csv(f"{NORMAL_DIR}/{split}.csv", index=False)
+    df.to_csv(f"{NORMAL_DIR}/{split}.csv", index=False)
 
 
 def save_stationary_data(df: pd.DataFrame, split) -> None:
-    stationary = df.drop(df.index[:WARMUP_ROWS])
     os.makedirs(STATIONARY_DIR, exist_ok=True)
-    stationary.to_csv(f"{STATIONARY_DIR}/{split}.csv", index=False)
+    df.to_csv(f"{STATIONARY_DIR}/{split}.csv", index=False)
+
+
+def drop_warmup_rows(df: pd.DataFrame):
+    return df.drop(df.index[:WARMUP_ROWS])
 
 
 def run():
@@ -141,8 +143,9 @@ def run():
         validate_ohlcv(df, split)
 
     for split in DATASET_SPLITS:
-        save_candlesticks(splits_raw[split], split)
-        save_stationary_data(make_stationary(splits_raw[split]), split)
+        without_warmup = drop_warmup_rows(splits_raw[split])
+        save_candlesticks(without_warmup, split)
+        save_stationary_data(make_stationary(without_warmup), split)
 
     for split, df in splits_raw.items():
         splits_ind = build_indicators(df.copy())

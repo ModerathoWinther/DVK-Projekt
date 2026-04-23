@@ -39,9 +39,8 @@ class TradingAgent:
         self.epsilon_init = hyperparameters['epsilon_init']
         self.epsilon_decay = hyperparameters['epsilon_decay']
         self.epsilon_min = hyperparameters['epsilon_min']
-        self.stop_on_reward = hyperparameters['stop_on_reward']
         self.fc1_nodes = hyperparameters['fc1_nodes']
-        self.indicator_columns = 0
+        self.max_episodes = hyperparameters['max_episodes']
         self.parameters = hyperparameters['env_make_params']
         self.split = self.parameters['split']
         self.enable_double_dqn = hyperparameters['enable_double_dqn']
@@ -55,6 +54,8 @@ class TradingAgent:
         self.GRAPH_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.png')
 
     def run(self, is_training=True):
+        log_message = ""
+
         if is_training:
             start_time = datetime.now()
             last_graph_update_time = start_time
@@ -98,7 +99,7 @@ class TradingAgent:
             policy_dqn.eval()
 
         # Main training loop, runs until dataset is complete
-        for episode in itertools.count():
+        for episode in range(self.max_episodes):
 
             state, _ = env.reset()
             state = torch.tensor(state, dtype=torch.float, device=DEVICE)
@@ -106,7 +107,7 @@ class TradingAgent:
             terminated = False
             episode_reward = 0.0
 
-            while not terminated and episode_reward < self.stop_on_reward:
+            while not terminated:
 
                 if is_training and random.random() < epsilon:
                     action = random.randrange(len(ACTION_SPACE))
@@ -142,7 +143,7 @@ class TradingAgent:
 
             # Save model when new best reward is obtained.
             if is_training:
-                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  n steps: {step_count}\t|  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}\t|  (episode reward: {episode_reward:.1f})"
+                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  from line: {env.current_step - step_count} to {env.current_step} in dataset\t\t|  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}\t|  (episode reward: {episode_reward:.1f})"
                 if episode_sharpe > best_sharpe:
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
@@ -170,9 +171,11 @@ class TradingAgent:
                     if step_count > self.network_sync_rate:
                         target_dqn.load_state_dict(policy_dqn.state_dict())
                         step_count = 0
+                print(log_message)
             elif self.split == 'test':
                 print("reward", episode_reward)
                 print(env.get_episode_stats())
+
     def save_graph(self, rewards_per_episode, epsilon_history, sharpe_per_episode, win_rate_per_episode):
         fig = plt.figure(figsize=(15, 10))
 

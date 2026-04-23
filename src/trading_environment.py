@@ -27,28 +27,17 @@ class TradingEnvironment(gym.Env):
         else:
             self.action_list = ACTION_SPACE
 
+        self.column_count = params.get('column_count')
         self.input_data, self.prices = init_state.run(**params)
 
         self.col_high_wick = 0
         self.col_low_wick = 1
         self.col_trend = 2
         self.col_input_vol = 3
-        col = 4
-        if self.atr:
-            self.col_atr = col
-            col += 1
-        if self.macd:
-            self.col_macd = col
-            col += 3
-        if self.rsi:
-            self.col_rsi = col
-            col += 1
-
-
-        self.col_open = 0
-        self.col_high = 1
-        self.col_low = 2
-        self.col_close = 3
+        self.col_open, self.col_high, self.col_low, self.col_close, self.col_vol = range(5)
+        self.col_atr = 5
+        self.col_macd = 6
+        self.col_rsi = 9
 
         self.data_length = len(self.input_data)
 
@@ -57,6 +46,15 @@ class TradingEnvironment(gym.Env):
             self.max_start = 0
         else:
             self.max_start = self.data_length - self.episode_length - 1
+
+        self.visible_cols = [self.column_count]
+
+        if params.get('atr'):
+            self.visible_cols.append(self.col_atr)
+        if params.get('macd'):
+            self.visible_cols.extend([self.col_macd, self.col_macd + 1, self.col_macd + 2])
+        if params.get('rsi'):
+            self.visible_cols.append(self.col_rsi)
 
         self.current_step = 0
         self.episode_end = self.episode_length
@@ -71,34 +69,32 @@ class TradingEnvironment(gym.Env):
 
         self.episode_results = []
 
+        num_obs_features = len(self.visible_cols) + (self.num_trades * 4)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(self.input_data.shape[1] + self.num_trades * 3,),
+            shape=(num_obs_features,),
             dtype=np.float32
         )
-
         self.action_space = spaces.Discrete(len(self.action_list))
-        print(f"\n\nepisode_length={self.episode_length}, max_start={self.max_start}, data_length={self.data_length}\n\n")
+        self._log_init_diagnostics()
 
-        print(
-            f"Close range: {self.input_data[:, self.col_close].min():.4f} to {self.input_data[:, self.col_close].max():.4f}")
-        print(f"Median close: {np.median(self.input_data[:, self.col_close]):.4f}")
-        print(f"SL distances: {[a.sl for a in self.action_list if a.direction != Direction.HOLD]}")
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        if self.split == 'train' and self.max_start > 0:
+        if self.split == "train":
+            self.max_start = len(self.input_data) - self.episode_length - 1
             self.current_step = np.random.randint(0, self.max_start)
+            self.episode_end = self.current_step + self.episode_length
         else:
             self.current_step = 0
+            self.episode_end = self.max_start
 
         if len(self.closed_trades) > 0:
             episode_stats = self._calc_episode_stats()
             self.episode_results.append(episode_stats)
         self.closed_trades = []
 
-        self.current_step = 0
         self.current_equity = self.initial_capital
         self.equity_curve = [self.initial_capital]
         self.open_slots = self.num_trades
@@ -146,6 +142,7 @@ class TradingEnvironment(gym.Env):
                     break
 
         reward = realized_pnl
+        self._update_trades_obs(close)
 
         self.current_equity += realized_pnl
         self.current_step += 1
@@ -197,8 +194,35 @@ class TradingEnvironment(gym.Env):
 
         return total_realized_pnl, closed
 
+    def _update_trades_obs(self, close: float) -> None:
+        for i in range(self.num_trades):
+            direction, _, sl, tp = self.trades_state[i]
+            if direction != 0:
+                self.trades_obs[i] = [direction, abs(sl - close), abs(tp - close)]
+            else:
+                self.trades_obs[i] = [0.0, 0.0, 0.0]
+
+    def _log_init_diagnostics(self):
+        closes = self.input_data[:, self.col_close]
+        bar_ranges = self.input_data[:, self.col_high] - self.input_data[:, self.col_low]
+        median_range = float(np.median(bar_ranges))
+        print(f"Input data shape  : {self.input_data.shape}")
+        print(f"Observation shape : {self.observation_space.shape}")
+        print(f"Close range       : {closes.min():.4f} to {closes.max():.4f}")
+        print(f"Median close      : {np.median(closes):.4f}")
+        print(f"Median bar range  : {median_range:.6f}")
+        if self.atr:
+            print(f"Median ATR        : {np.median(self.input_data[:, self.col_atr]):.6f}")
+        sl_levels = [a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]
+        tp_levels = [a.tp for a in ACTION_SPACE if a.direction != Direction.HOLD]
+        print(f"SL levels         : {sorted(set(sl_levels))}")
+        print(f"TP levels         : {sorted(set(tp_levels))}")
+
+        print(f"Tightest SL / bar range: {min(sl_levels) / median_range:.2f}×")
+
     def _calculate_terminated_reward(self):
         return 0
+
 
     def _calc_episode_stats(self):
         closed_trades = len(self.closed_trades)

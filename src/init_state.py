@@ -1,13 +1,9 @@
 import pandas as pd
+from data_process import OHLCV_NORMALIZED, INDICATOR_DIR, STATIONARY_DIR, NORMAL_DIR as PRICE_DIR
 
-import data_process as dp
-
-PRICE_DIR = dp.NORMAL_DIR
-INDICATOR_DIR = dp.INDICATOR_DIR
-STATIONARY_DIR = dp.STATIONARY_DIR
-
-def get_input_data(split):
-    price = pd.read_csv(f"{STATIONARY_DIR}/{split}.csv",
+def get_input_data(split, dataset):
+    dataset_path = OHLCV_NORMALIZED if dataset == 'ohlcv' else STATIONARY_DIR
+    price = pd.read_csv(f"{dataset_path}/{split}.csv",
                         index_col="date", parse_dates=["date"])
 
     frames = [price, pd.read_csv(f"{INDICATOR_DIR}/{split}/atr.csv",
@@ -18,7 +14,7 @@ def get_input_data(split):
                           index_col="date", parse_dates=["date"])]
 
     input_data = pd.concat(frames, axis=1).dropna()
-
+    print(f"INIT_STATE WITH: Dataset: {dataset}\t|\tinput_data cols: {input_data.columns}")
     return input_data.to_numpy()
 
 def get_prices(split):
@@ -27,4 +23,4 @@ def get_prices(split):
     return price.to_numpy()
 
 def run(**params):
-    return get_input_data(params.get('split')), get_prices(params.get('split'))
+    return get_input_data(params.get('split'), params.get('data_format')), get_prices(params.get('split'))

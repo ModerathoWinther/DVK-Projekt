@@ -6,6 +6,7 @@ import data_fetch
 import indicators as ind
 
 INPUT_DIR = data_fetch.OUTPUT_DIR
+OHLCV_NORMALIZED = os.path.join(data_fetch.DATA_DIR, "processed/ohlcv-normalized")
 NORMAL_DIR = os.path.join(data_fetch.DATA_DIR, "processed/normal")
 STATIONARY_DIR = os.path.join(data_fetch.DATA_DIR, "processed/stationary")
 INDICATOR_DIR = os.path.join(data_fetch.DATA_DIR, "processed/indicators")

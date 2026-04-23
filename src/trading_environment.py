@@ -221,7 +221,21 @@ class TradingEnvironment(gym.Env):
         print(f"Tightest SL / bar range: {min(sl_levels) / median_range:.2f}×")
 
     def _calculate_terminated_reward(self):
-        return 0
+        close = self.prices[self.current_step][self.col_close]
+        total_realized_pnl = 0.0
+        for i in range(self.num_trades):
+            if self.trades_state[i, 0] == 0:
+                continue
+
+            direction, entry_price, _, _ = self.trades_state[i]
+
+            pnl = (close - entry_price) * direction
+            realized_pnl = pnl - self.transaction_cost * abs(entry_price)
+            total_realized_pnl += realized_pnl
+            self.trades_state[i] = [0, 0, 0, 0]
+            self.closed_trades.append(realized_pnl)
+
+        return total_realized_pnl
 
 
     def _calc_episode_stats(self):

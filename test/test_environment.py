@@ -108,11 +108,9 @@ class TestTradingEnvironment(unittest.TestCase):
         env.episode_length = env.current_step - env.episode_end
 
         # Both sl and tp hit at same time, should hit sl
-        print(env.prices[env.current_step])
         env.step(BUY_ACTION)
-        print(env.prices[env.current_step])
+        env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        print(env.prices[env.current_step])
         assert reward == tp_loss - transaction_cost
 
         # todo multiple trades at once

@@ -188,7 +188,7 @@ class TradingEnvironment(gym.Env):
             hit_tp = (direction > 0 and high >= tp) or (direction < 0 and low  <= tp)
 
             if hit_sl or hit_tp:
-                pnl = (tp - entry_price) * direction if hit_tp else (sl - entry_price) * direction
+                pnl = (sl - entry_price) * direction if hit_sl else (tp - entry_price) * direction
                 realized_pnl = pnl - self.transaction_cost * abs(entry_price)
                 total_realized_pnl += realized_pnl
                 self.trades_state[i] = [0, 0, 0, 0]

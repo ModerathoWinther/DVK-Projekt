@@ -143,7 +143,7 @@ class TradingAgent:
 
             # Save model when new best reward is obtained.
             if is_training:
-                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  from line: {env.current_step - step_count} to {env.current_step} in dataset\t\t|  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}\t|  (episode reward: {episode_reward:.1f})"
+                log_message = f"[STATUS] |  {datetime.now().strftime(DATE_FORMAT)}  |  End of episode {episode}  |  n steps: {step_count} from row {env.current_step - step_count} in dataset\t\t|  win_rate: {win_rate:.2f}  |  Epsilon: {epsilon:.3f}  |  Sharpe: {episode_sharpe:.3f}\t|  (episode reward: {episode_reward:.1f})"
                 if episode_sharpe > best_sharpe:
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')

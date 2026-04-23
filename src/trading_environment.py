@@ -152,8 +152,11 @@ class TradingEnvironment(gym.Env):
         self.current_equity += realized_pnl
         self.current_step += 1
         terminated = self.current_step >= self.episode_end
+
+
         next_close = self.prices[self.current_step][self.col_close] if self.current_step < len(self.prices) else close
         self._update_trades_obs(next_close)
+
         if terminated:
             tr = self._calculate_terminated_reward()
             self.current_equity += tr

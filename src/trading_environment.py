@@ -126,35 +126,41 @@ class TradingEnvironment(gym.Env):
     def step(self, action: int):
         current_prices = self.prices[self.current_step]
         high, low, close = current_prices[self.col_high], current_prices[self.col_low], current_prices[self.col_close]
-        open = self.prices[self.current_step + 1][self.col_open]
 
         realized_pnl, _ = self._process_trades(high, low)
-
-        act = self.action_list[action]
-        if act.direction != Direction.HOLD and self.open_slots > 0:
-            entry_price = open
-            sl = entry_price - act.direction.value * (entry_price * act.sl)
-            tp = entry_price + act.direction.value * (entry_price * act.tp)
-            for i in range(self.num_trades):
-                if self.trades_state[i, 0] == 0:
-                    self.trades_state[i] = [act.direction.value, entry_price, sl, tp]
-                    self.open_slots -= 1
-                    break
-
         reward = realized_pnl
-        self._update_trades_obs(close)
 
-        self.current_equity += realized_pnl
         self.current_step += 1
-        terminated = self.current_step >= self.episode_end
+        self.current_equity += realized_pnl
 
-        if terminated:
-            tr = self._calculate_terminated_reward()
-            self.current_equity += tr
-            reward += tr
+        is_last_step = (self.current_step + 1) >= self.episode_end
+        if is_last_step:
+            current_prices = self.prices[self.current_step]
+            high, low = current_prices[self.col_high], current_prices[self.col_low]
+            high_low_hit_r, _ = self._process_trades(high, low)
+            self.current_equity += high_low_hit_r
+            reward += high_low_hit_r
 
+            term_r = self._calculate_terminated_reward()
+            self.current_equity += term_r
+            reward += term_r
+
+        else:
+            act = self.action_list[action]
+            if act.direction != Direction.HOLD and self.open_slots > 0:
+                open = self.prices[self.current_step][self.col_open]
+                entry_price = open
+                sl = entry_price - act.direction.value * (entry_price * act.sl)
+                tp = entry_price + act.direction.value * (entry_price * act.tp)
+                for i in range(self.num_trades):
+                    if self.trades_state[i, 0] == 0:
+                        self.trades_state[i] = [act.direction.value, entry_price, sl, tp]
+                        self.open_slots -= 1
+                        break
+
+        self._update_trades_obs(close)
         self.equity_curve.append(self.current_equity)
-        return self._get_observation(), reward, terminated, False, {}
+        return self._get_observation(), reward, is_last_step, False, {}
 
     def _get_observation(self):
         current_prices = self.prices[self.current_step]
@@ -228,12 +234,12 @@ class TradingEnvironment(gym.Env):
                 continue
 
             direction, entry_price, _, _ = self.trades_state[i]
-
             pnl = (close - entry_price) * direction
             realized_pnl = pnl - self.transaction_cost * abs(entry_price)
             total_realized_pnl += realized_pnl
             self.trades_state[i] = [0, 0, 0, 0]
             self.closed_trades.append(realized_pnl)
+            print("realized_pnl ", realized_pnl, "close", close, "entry_price", entry_price)
 
         return total_realized_pnl
 

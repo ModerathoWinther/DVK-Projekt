@@ -136,7 +136,7 @@ class TestTradingEnvironment(unittest.TestCase):
         assert ep_stats.get('loss_rate') == loss_rate
         assert_almost_equal(profit_factor, ep_stats.get('profit_factor'))
         assert_almost_equal(expectancy, ep_stats.get('expectancy'))
-        assert ep_stats.get('max_drawdown') == max_drawdown
+        assert_almost_equal(max_drawdown, ep_stats.get('max_drawdown'))
         #assert_almost_equal(ep_stats.get('sharpe_ratio'), sharpe_ratio)
 
         # Both sl and tp hit at same time, should hit sl

@@ -290,10 +290,10 @@ class TradingEnvironment(gym.Env):
         if total_loss != 0:
             profit_factor = total_gain / total_loss
 
-        peak = max(self.equity_curve)
-        trough = min(self.equity_curve)
+        peak = np.maximum.accumulate(self.equity_curve)
+        drawdowns = (self.equity_curve - peak) / peak
+        max_drawdown = np.min(drawdowns)
 
-        max_drawdown = (trough - peak) / peak
         sharpe_ratio = self.calculate_sharpe_ratio()
 
         stats = {

@@ -8,12 +8,7 @@ def get_input_data(split, dataset):
                         index_col="date", parse_dates=["date"])
 
     frames = [price, pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
-                                 index_col="date", parse_dates=["date"]),
-              pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
-                          index_col="date", parse_dates=["date"]),
-              pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
-                          index_col="date", parse_dates=["date"])]
-
+                                 index_col="date", parse_dates=["date"])]
     input_data = pd.concat(frames, axis=1).dropna()
     print(f"INIT_STATE WITH: Dataset: {dataset}\t|\tinput_data cols: {input_data.columns}")
     return input_data.to_numpy()

@@ -6,9 +6,9 @@ import data_fetch
 import indicators as ind
 
 INPUT_DIR = data_fetch.OUTPUT_DIR
-OHLCV_NORMALIZED = os.path.join(data_fetch.DATA_DIR, "processed/ohlcv-normalized")
 NORMAL_DIR = os.path.join(data_fetch.DATA_DIR, "processed/normal")
 STATIONARY_DIR = os.path.join(data_fetch.DATA_DIR, "processed/stationary")
+OHLCV_NORMALIZED = os.path.join(STATIONARY_DIR, "ohlcv-normalized")
 INDICATOR_DIR = os.path.join(data_fetch.DATA_DIR, "processed/indicators")
 
 WARMUP_ROWS = 33
@@ -102,10 +102,10 @@ def save_separate_indicator_files(df: pd.DataFrame, split: str) -> None:
         df[["date", col]].to_csv(path, index=False)
 
 
-def compute_price_zscore_params(df_train: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+def compute_price_zscore_params(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     price_cols = ["open", "high", "low", "close", "volume"]
-    price_mean = df_train[price_cols].mean()
-    price_std = df_train[price_cols].std()
+    price_mean = df[price_cols].mean()
+    price_std = df[price_cols].std()
 
     for col in price_cols:
         print(f"    {col:<8}  mean={price_mean[col]:>12.4f}   std={price_std[col]:>12.4f}")
@@ -134,6 +134,9 @@ def save_stationary_data(df: pd.DataFrame, split) -> None:
 def drop_warmup_rows(df: pd.DataFrame):
     return df.drop(df.index[:WARMUP_ROWS])
 
+def save_frames_to_csv(df: pd.DataFrame, dir, split) -> None:
+    os.makedirs(dir, exist_ok=True)
+    df.to_csv(f'{dir}/{split}.csv')
 
 def run():
     splits_raw = {}
@@ -152,11 +155,12 @@ def run():
         splits_ind = build_indicators(df.copy())
         save_separate_indicator_files(splits_ind, split)
 
-    """
     for split in DATASET_SPLITS:
-        splits_raw[split] = apply_price_zscore(splits_raw[split], price_mean, price_std)
-    save_normalized_prices(splits_raw["train"])
-    """
+        price_mean, price_std = compute_price_zscore_params(df=splits_raw[split])
+        normalized_df = apply_price_zscore(splits_raw[split], price_mean=price_mean, price_std=price_std)
+        save_frames_to_csv(normalized_df, f"{OHLCV_NORMALIZED}", split)
+        print(f'Saving split: {split} of df: {normalized_df} to path :{OHLCV_NORMALIZED} ')
+
 
 
 if __name__ == "__main__":

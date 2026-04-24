@@ -1,16 +1,17 @@
 import pandas as pd
-from data_process import OHLCV_NORMALIZED, INDICATOR_DIR, STATIONARY_DIR, NORMAL_DIR as PRICE_DIR
+from data_process import Z_SCORE_INDICATOR_DIR, Z_SCORE_OHLCV_DIR, Z_SCORE_WICK_DIR, NORMAL_DIR as PRICE_DIR
+
 
 def get_input_data(split, dataset):
-    dataset_path = OHLCV_NORMALIZED if dataset == 'ohlcv' else STATIONARY_DIR
+    dataset_path = Z_SCORE_OHLCV_DIR if dataset == 'ohlcv' else Z_SCORE_WICK_DIR
     price = pd.read_csv(f"{dataset_path}/{split}.csv",
                         index_col="date", parse_dates=["date"])
 
-    frames = [price, pd.read_csv(f"{INDICATOR_DIR}/{split}/atr.csv",
+    frames = [price, pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
                                  index_col="date", parse_dates=["date"]),
-              pd.read_csv(f"{INDICATOR_DIR}/{split}/macd.csv",
+              pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
                           index_col="date", parse_dates=["date"]),
-              pd.read_csv(f"{INDICATOR_DIR}/{split}/rsi.csv",
+              pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
                           index_col="date", parse_dates=["date"])]
 
     input_data = pd.concat(frames, axis=1).dropna()

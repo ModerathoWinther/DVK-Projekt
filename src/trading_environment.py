@@ -132,9 +132,9 @@ class TradingEnvironment(gym.Env):
 
     def step(self, action: int):
         current_prices = self.prices[self.current_step]
-        high, low, close = current_prices[self.col_high], current_prices[self.col_low], current_prices[self.col_close]
+        open, high, low, close = current_prices[self.col_open], current_prices[self.col_high], current_prices[self.col_low], current_prices[self.col_close]
 
-        realized_pnl, _ = self._process_trades(high, low)
+        realized_pnl, _ = self._process_trades(open, high, low)
         reward = realized_pnl
 
         self.current_step += 1
@@ -143,8 +143,8 @@ class TradingEnvironment(gym.Env):
         is_last_step = (self.current_step + 1) >= self.episode_end
         if is_last_step:
             current_prices = self.prices[self.current_step]
-            high, low = current_prices[self.col_high], current_prices[self.col_low]
-            high_low_hit_r, _ = self._process_trades(high, low)
+            open, high, low = current_prices[self.col_open], current_prices[self.col_high], current_prices[self.col_low]
+            high_low_hit_r, _ = self._process_trades(open, high, low)
             self.current_equity += high_low_hit_r
             reward += high_low_hit_r
 
@@ -175,7 +175,7 @@ class TradingEnvironment(gym.Env):
             self.trades_obs.flatten()
         ]).astype(np.float32)
 
-    def _process_trades(self, high: float, low: float) -> tuple[float, int]:
+    def _process_trades(self, open: float, high: float, low: float) -> tuple[float, int]:
         total_realized_pnl = 0.0
         closed = 0
         for i in range(self.num_trades):
@@ -184,10 +184,21 @@ class TradingEnvironment(gym.Env):
 
             direction, entry_price, sl, tp = self.trades_state[i]
 
+            open_hit_sl = (direction > 0 and open <= sl) or (direction < 0 and open >= sl)
+            open_hit_tp = (direction > 0 and open >= tp) or (direction < 0 and open <= tp)
+
             hit_sl = (direction > 0 and low  <= sl) or (direction < 0 and high >= sl)
             hit_tp = (direction > 0 and high >= tp) or (direction < 0 and low  <= tp)
 
-            if hit_sl or hit_tp:
+            if open_hit_sl or open_hit_tp:
+                pnl = open - entry_price * direction
+                realized_pnl = pnl - self.transaction_cost * abs(entry_price)
+                total_realized_pnl += realized_pnl
+                self.trades_state[i] = [0, 0, 0, 0]
+                self.open_slots += 1
+                closed += 1
+                self.closed_trades.append(realized_pnl)
+            elif hit_sl or hit_tp:
                 pnl = (sl - entry_price) * direction if hit_sl else (tp - entry_price) * direction
                 realized_pnl = pnl - self.transaction_cost * abs(entry_price)
                 total_realized_pnl += realized_pnl

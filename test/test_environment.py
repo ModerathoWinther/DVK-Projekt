@@ -86,13 +86,13 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(BUY_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        #assert reward == tp_win + 0.5 - transaction_cost
+        assert_almost_equal(TP_WIN + 0.5 - TRANSACTION_COST, reward)
 
         # Buy, hit sl, with slippage
         env.step(BUY_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        #assert reward == tp_loss - 0.5 - transaction_cost
+        assert_almost_equal(TP_LOSS - 0.5 - TRANSACTION_COST, reward)
 
         # End of episode closes trades
         env.step(BUY_ACTION)
@@ -101,7 +101,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         _, reward, terminated, _, _ = env.step(HOLD_ACTION)
         assert terminated == True
-        assert_almost_equal(reward, 0.5 - TRANSACTION_COST)
+        assert_almost_equal(0.5 - TRANSACTION_COST, reward)
 
         # todo check episode stats
         env.reset()

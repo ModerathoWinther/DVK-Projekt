@@ -156,8 +156,9 @@ def run():
         save_separate_indicator_files(splits_ind, split)
 
     for split in DATASET_SPLITS:
-        price_mean, price_std = compute_price_zscore_params(df=splits_raw[split])
-        normalized_df = apply_price_zscore(splits_raw[split], price_mean=price_mean, price_std=price_std)
+        df_ohlcv = drop_warmup_rows(splits_raw[split])
+        price_mean, price_std = compute_price_zscore_params(df=df_ohlcv)
+        normalized_df = apply_price_zscore(df_ohlcv, price_mean=price_mean, price_std=price_std)
         save_frames_to_csv(normalized_df, f"{OHLCV_NORMALIZED}", split)
         print(f'Saving split: {split} of df: {normalized_df} to path :{OHLCV_NORMALIZED} ')
 

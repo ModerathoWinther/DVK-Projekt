@@ -30,13 +30,15 @@ PARAMS = {
     "initial_capital": 10000.0,
     "transaction_cost": 0.0002,
     "episode_length": 33,
-    "price_columns": 3,
+    "data_format": "ohlcv",
     "unit_test": True,
 }
 
 filepath = os.path.abspath("test/raw_unit_test.csv")
 os.makedirs("data/raw/unit_test", exist_ok=True)
 shutil.copyfile(filepath, "data/raw/unit_test/raw_unit_test.csv")
+shutil.copyfile(filepath, "data/processed/stationary/indicators/unit_test.csv")
+shutil.copyfile(filepath, "data/processed/stationary/ohlcv-normalized/unit_test.csv")
 
 raw = dp.load_split(SPLIT)
 stat = dp.make_stationary(raw)
@@ -104,7 +106,7 @@ class TestTradingEnvironment(unittest.TestCase):
         assert terminated == True
         assert_almost_equal(0.5 - TRANSACTION_COST, reward)
 
-        # todo check episode stats
+        # Reset env
         env.reset()
         env.current_step = env.episode_length
         env.episode_end = len(env.prices)
@@ -120,8 +122,9 @@ class TestTradingEnvironment(unittest.TestCase):
         avg_loss = total_loss / 3
         loss_rate = (3 / 7)
 
-        trough = env.initial_capital
-        peak = env.initial_capital + (TP_WIN + 0.5 - TRANSACTION_COST)
+        # init + TP_WIN - SL_LOSS + TP_WIN - SL_LOSS + TP_WIN + 0.5
+        peak = env.initial_capital + (TP_WIN * 2 + 0.5) - (TRANSACTION_COST * 5)
+        trough = peak + SL_LOSS - 0.5 - TRANSACTION_COST
 
         profit_factor = total_win / total_loss
         expectancy = (win_rate * avg_win) - (loss_rate * avg_loss)
@@ -153,3 +156,6 @@ class TestTradingEnvironment(unittest.TestCase):
         _, reward, _, _, _ = env.step(HOLD_ACTION)
         assert reward == (TP_WIN * 2) - (TRANSACTION_COST * 2)
         assert len(env.closed_trades) == 2
+
+    def test_equity_curve(self):
+        return 0

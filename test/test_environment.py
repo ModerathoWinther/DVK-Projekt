@@ -45,6 +45,7 @@ stat = dp.make_stationary(raw)
 dp.save_candlesticks(raw, SPLIT)
 dp.save_stationary_data(stat, SPLIT)
 
+
 class TestTradingEnvironment(unittest.TestCase):
     def setUp(self):
         self.env = TradingEnvironment(PARAMS)
@@ -107,6 +108,7 @@ class TestTradingEnvironment(unittest.TestCase):
         assert_almost_equal(0.5 - TRANSACTION_COST, reward)
 
         # Reset env
+        equity_curve = env.equity_curve
         env.reset()
         env.current_step = env.episode_length
         env.episode_end = len(env.prices)
@@ -130,6 +132,12 @@ class TestTradingEnvironment(unittest.TestCase):
         expectancy = (win_rate * avg_win) - (loss_rate * avg_loss)
         max_drawdown = (trough - peak) / peak
 
+        equity = np.array(equity_curve)
+        returns = np.diff(equity) / equity[:-1]
+        active_returns = returns[returns != 0.0]
+        trades_per_year = ((len(active_returns) / len(equity)) * (252 * 92))
+        sharpe_ratio = (np.mean(active_returns) / np.std(active_returns, ddof=1)) * np.sqrt(trades_per_year)
+
         ep_stats = env.get_episode_stats()[0]
         assert ep_stats.get('closed_trades') == 7
         assert ep_stats.get('win_rate') == win_rate
@@ -137,7 +145,7 @@ class TestTradingEnvironment(unittest.TestCase):
         assert_almost_equal(profit_factor, ep_stats.get('profit_factor'))
         assert_almost_equal(expectancy, ep_stats.get('expectancy'))
         assert_almost_equal(max_drawdown, ep_stats.get('max_drawdown'))
-        #assert_almost_equal(ep_stats.get('sharpe_ratio'), sharpe_ratio)
+        assert_almost_equal(sharpe_ratio, ep_stats.get('sharpe_ratio'))
 
         # Both sl and tp hit at same time, should hit sl
         env.step(BUY_ACTION)
@@ -158,4 +166,24 @@ class TestTradingEnvironment(unittest.TestCase):
         assert len(env.closed_trades) == 2
 
     def test_equity_curve(self):
-        return 0
+        env = self.env
+
+        env.step(BUY_ACTION)
+        env.step(BUY_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)  # Two trades hit tp
+        env.step(BUY_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)
+        env.step(HOLD_ACTION)  # One trade hit sl
+
+        equity_curve = env.equity_curve
+        assert len(equity_curve) == 12
+        assert equity_curve[0] == env.initial_capital
+        assert equity_curve[5] == env.initial_capital
+        assert equity_curve[6] == env.initial_capital + (TP_WIN * 2) - (TRANSACTION_COST * 2)
+        assert equity_curve[10] == equity_curve[6]
+        assert equity_curve[11] == equity_curve[6] + SL_LOSS - TRANSACTION_COST

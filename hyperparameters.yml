@@ -19,6 +19,10 @@ midas-train1:
     rsi: true
     data_format: "ohlcv"
     episode_length: 5000
+  live_test:
+    time_start: "2024-01-15 09:30:00"
+    time_frame_minute_size: 1
+    test_minute_length: 15
   env_id: 'midas-train1'
   learning_rate_a: 0.0002
   epsilon_init: 1.0

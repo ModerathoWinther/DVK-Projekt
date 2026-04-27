@@ -1,5 +1,7 @@
 import argparse
 import os
+from time import sleep
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 import json
@@ -24,9 +26,16 @@ class LiveTest:
             all_hyperparameter_sets = yaml.safe_load(file)
             params = all_hyperparameter_sets[params]
 
-        self.time_start = datetime.datetime.now()
+        live_test_params = params.get('live_test')
+
+        self.time_start = datetime.datetime.strptime(
+            live_test_params.get('time_start'),
+            "%Y-%m-%d %H:%M:%S")
         self.next_time_frame = self.time_start
-        self.time_end = self.time_start + datetime.timedelta(minutes=15)
+        self.time_frame_minute_size = live_test_params.get('time_frame_minute_size')
+        self.time_end = (self.time_start +
+                         datetime.timedelta(minutes=live_test_params.get('test_minute_length')))
+
         self.parameters = params.get('')
         self.env_id = params.get('env_id')
         self.env_params = params.get('env_make_params')
@@ -129,18 +138,32 @@ class LiveTest:
         }
 
     def run(self):
-        # Loop
+        print()
+        print(f"PROGRAM START: {datetime.datetime.now()}")
+        print(f"TRADE START: {self.time_start}")
+        print(f"TRADE END: {self.time_end}")
+        print()
 
-        # use get_market_data to fetch last candlestick
+        while True:
+            if datetime.datetime.now() > self.next_time_frame:
+                # use get_market_data to fetch last candlestick
 
-        # todo Translate in-data to format used in training (normalize, etc)
+                # todo Translate in-data to format used in training (normalize, etc)
 
-        # todo Let model decide action to take
+                # todo Let model decide action to take
 
-        # use send_order to send orders via MetaTrader, only if mt5.positions_total() < 5
+                # use send_order to send orders via MetaTrader, only if mt5.positions_total() < 5
 
-        # After loop
+                print(f"[{datetime.datetime.now()}] TRADE DONE")
+                if self.next_time_frame >= self.time_end:
+                    break
+                self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
+            else:
+                sleep(0.01)
+
         # todo Use history_deals_get or history_orders_get to extract results (not really sure if they work)
+        print()
+        print(f"TRADING FINISHED AT: {datetime.datetime.now()}")
 
         return 1
 
@@ -152,4 +175,5 @@ if __name__ == '__main__':
     # mt5.initialize(args.mt5_details)
     mt5.initialize()
     midas = LiveTest(params=args.hyperparameters)
+    midas.run()
 

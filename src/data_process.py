@@ -209,12 +209,14 @@ def run():
         ohlcv_norm = apply_ohlcv_zscore(splits_trimmed[split], params)
         save_frames_to_csv(ohlcv_norm, Z_SCORE_OHLCV_DIR, split)
 
-        wick_df   = make_stationary(splits_trimmed[split])
+        wick_df = make_stationary(splits_trimmed[split])
         wick_norm = apply_wick_zscore(wick_df, params)
         save_frames_to_csv(wick_norm, Z_SCORE_WICK_DIR, split)
 
         ind_trimmed = drop_warmup_rows(splits_indicators[split])
-        ind_norm    = apply_indicator_zscore(ind_trimmed, params)
+        ind_norm = apply_indicator_zscore(ind_trimmed, params)
+        # RSI is normalized by dividing by 100
+        ind_norm["rsi"] = ind_norm["rsi"] / 100
         save_frames_to_csv(ind_norm, Z_SCORE_INDICATOR_DIR, split)
 
 

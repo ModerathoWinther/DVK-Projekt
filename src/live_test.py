@@ -1,6 +1,7 @@
 import argparse
 import os
-from time import sleep
+
+import numpy as np
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
@@ -17,6 +18,7 @@ import indicators as ind
 
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
+WARMuP_BARS = dp.WARMUP_ROWS + 1
 
 class LiveTest:
 
@@ -61,15 +63,14 @@ class LiveTest:
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
-        self.input_data = self._process_data(self.get_market_data())
+        self.input_data = self.get_market_data()
         print(self.time_start)
         print(self.time_end)
         print(self.get_market_data())
         self.send_order(ACTION_SPACE[2])
+        print(self._compute_indicators(self.input_data))
+        print(self._normalize_ohlcv(self.input_data))
 
-    def _process_data(self, df: pd.DataFrame) -> pd.DataFrame:
-
-        return df
 
     def _get_num_states(self):
         n_states = 0
@@ -82,12 +83,38 @@ class LiveTest:
 
 
     def get_market_data(self) -> pd.DataFrame:
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, dp.WARMUP_ROWS)
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, WARMuP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
         df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
         return df
+
+    def _compute_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        ind.atr(df)
+        if self.macd:
+            ind.macd(df)
+        if self.rsi:
+            ind.rsi(df)
+        df = df.dropna().reset_index(drop=True)
+        return df
+
+    def _normalize_ohlcv(self, df: pd.DataFrame) -> np.ndarray:
+        p = self.z_scores
+        if self.data_format == 'ohlcv':
+            ohlc_mean, ohlc_std = p['ohlc'][0], p['ohlc'][1]
+            vol_mean, vol_std  = p['volume'][0], p['volume'][1]
+            row = df.iloc[-1]
+            return np.array([
+                (row['open']   - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['high']   - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['low']    - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['close']  - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['volume'] - vol_mean)  / (vol_std   + 1e-8),
+            ], dtype=np.float32)
+        # wick
+        else: return np.array(df, dtype=np.float32)
 
     def _load_z_score_params(self):
 

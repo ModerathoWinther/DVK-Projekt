@@ -9,6 +9,16 @@ midas-train1:
     transaction_cost: 0.0002
     data_format: "ohlcv"
     episode_length: 5000
+  mt5_details:
+    login: username
+    password: password
+    server: server.se
+    num_trades: 3
+    atr: true
+    macd: true
+    rsi: true
+    data_format: "ohlcv"
+    episode_length: 5000
   env_id: 'midas-train1'
   learning_rate_a: 0.0002
   epsilon_init: 1.0

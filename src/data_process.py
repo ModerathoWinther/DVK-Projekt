@@ -1,4 +1,5 @@
 import os
+import json
 import pandas as pd
 import data_fetch
 import indicators as ind
@@ -17,6 +18,7 @@ Z_SCORE_INDICATOR_DIR = os.path.join(NORMALIZED_DIR, "indicators")
 WARMUP_ROWS = 33
 DATASET_SPLITS = ["train", "val", "test"]
 SYMBOL = "XAUUSD"
+
 
 def load_split(split: str) -> pd.DataFrame:
     print(INPUT_DIR)
@@ -54,15 +56,15 @@ def validate_ohlcv(df: pd.DataFrame, split: str) -> None:
               f"the modal interval ({modal_gap}) — possible missing bars")
 
 
-def make_stationary(df: pd.DataFrame) -> pd.DataFrame:
-    stationary = pd.DataFrame({
+def to_wick_format(df: pd.DataFrame) -> pd.DataFrame:
+    wick = pd.DataFrame({
         "date": df["date"],
         "high_wick": df['high'] - df['open'],
         "low_wick": df['open'] - df['low'],
         "trend": df['close'] - df['open'],
         "volume": df['volume'],
     }, index=df.index)
-    return stationary
+    return wick
 
 
 def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -107,6 +109,7 @@ def save_separate_indicator_files(df: pd.DataFrame, split: str):
 
     return indicator_dfs
 
+
 def compute_zscore_params(ohlc_df: pd.DataFrame, wick_df: pd.DataFrame, ind_df: pd.DataFrame):
     ohlc_values = ohlc_df[['open', 'high', 'low', 'close']].values.flatten()
     wick_values = wick_df[['high_wick', 'low_wick', 'trend']].values.flatten()
@@ -122,9 +125,11 @@ def compute_zscore_params(ohlc_df: pd.DataFrame, wick_df: pd.DataFrame, ind_df: 
     }
     return params
 
+
 def apply_zscore(df: pd.DataFrame, params, param_key: str, cols: list[str]):
     mean, std = params.get(param_key)
     df[cols] = (df[cols] - mean) / std + 1e-8
+
 
 def apply_wick_zscore(df: pd.DataFrame, params):
     cols = ["high_wick", "low_wick", "trend"]
@@ -135,6 +140,7 @@ def apply_wick_zscore(df: pd.DataFrame, params):
     apply_zscore(df_vol, params, "volume", ["volume"])
     return pd.concat([df_wick, df_vol], axis=1)
 
+
 def apply_ohlcv_zscore(df: pd.DataFrame, params):
     cols = ["open", "high", "low", "close"]
     df_ohlc = df[["date"] + cols].copy().set_index("date")
@@ -143,6 +149,7 @@ def apply_ohlcv_zscore(df: pd.DataFrame, params):
     apply_zscore(df_ohlc, params, "ohlc", cols)
     apply_zscore(df_vol, params, "volume", ["volume"])
     return pd.concat([df_ohlc, df_vol], axis=1)
+
 
 def apply_indicator_zscore(df: pd.DataFrame, params):
     atr = df[["date", "atr"]].copy().set_index("date")
@@ -158,27 +165,24 @@ def apply_indicator_zscore(df: pd.DataFrame, params):
     # RSI is divided by 100 instead
     return pd.concat([atr, macd, macd_signal, macd_histogram, rsi], axis=1)
 
-def save_candlesticks(df: pd.DataFrame, split) -> None:
-    os.makedirs(NON_NORMAL_DIR, exist_ok=True)
-    df.to_csv(f"{NON_NORMAL_DIR}/{split}.csv", index=False)
-
-
-def save_stationary_data(df: pd.DataFrame, split) -> None:
-    os.makedirs(NORMALIZED_DIR, exist_ok=True)
-    df.to_csv(f"{NORMALIZED_DIR}/{split}.csv", index=False)
-
 
 def drop_warmup_rows(df: pd.DataFrame):
     return df.drop(df.index[:WARMUP_ROWS])
 
+
 def save_frames_to_csv(df: pd.DataFrame, directory: str, split: str) -> None:
     os.makedirs(directory, exist_ok=True)
     path = os.path.join(directory, f"{split}.csv")
-    df.to_csv(path, index=False)
+    df.to_csv(path)
     print(f"    Saved → {path}  ({len(df)} rows)")
 
-def run():
 
+def save_zscore_params_to_json(params):
+    with open(f'{NORMALIZED_DIR}/zscores.json', 'w') as f:
+        json.dump(params, f, ensure_ascii=False)
+
+
+def run():
     splits_raw = {}
     for split in DATASET_SPLITS:
         splits_raw[split] = load_split(split)
@@ -197,12 +201,12 @@ def run():
     }
 
     for split, df in splits_trimmed.items():
-        save_candlesticks(df, split)
-        save_stationary_data(make_stationary(df), split)
+        save_frames_to_csv(df, NON_NORMAL_DIR, split)
 
     print("\n  Fitting normalisation params on train split...")
-    train_wick = make_stationary(splits_trimmed["train"])
+    train_wick = to_wick_format(splits_trimmed["train"])
     params = compute_zscore_params(splits_trimmed["train"], train_wick, splits_indicators["train"])
+    save_zscore_params_to_json(params)
 
     for split in DATASET_SPLITS:
         print(f"\n  Normalising {split} with train mean/std...")
@@ -210,7 +214,7 @@ def run():
         ohlcv_norm = apply_ohlcv_zscore(splits_trimmed[split], params)
         save_frames_to_csv(ohlcv_norm, Z_SCORE_OHLCV_DIR, split)
 
-        wick_df = make_stationary(splits_trimmed[split])
+        wick_df = to_wick_format(splits_trimmed[split])
         wick_norm = apply_wick_zscore(wick_df, params)
         save_frames_to_csv(wick_norm, Z_SCORE_WICK_DIR, split)
 

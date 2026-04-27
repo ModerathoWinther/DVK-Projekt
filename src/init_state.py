@@ -1,5 +1,5 @@
 import pandas as pd
-from data_process import Z_SCORE_INDICATOR_DIR, Z_SCORE_OHLCV_DIR, Z_SCORE_WICK_DIR, NORMAL_DIR as PRICE_DIR
+from data_process import Z_SCORE_INDICATOR_DIR, Z_SCORE_OHLCV_DIR, Z_SCORE_WICK_DIR, NON_NORMAL_DIR as PRICE_DIR
 
 
 def get_input_data(split, dataset):

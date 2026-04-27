@@ -6,13 +6,13 @@ import indicators as ind
 INPUT_DIR = data_fetch.OUTPUT_DIR
 PROCESSED_DIR = os.path.join(data_fetch.DATA_DIR, "processed")
 
-NORMAL_DIR = os.path.join(PROCESSED_DIR, "normal")
-NORMAL_INDICATOR_DIR = os.path.join(NORMAL_DIR, "indicators")
+NON_NORMAL_DIR = os.path.join(PROCESSED_DIR, "non_normalized")
+INDICATOR_DIR = os.path.join(NON_NORMAL_DIR, "indicators")
 
-STATIONARY_DIR = os.path.join(PROCESSED_DIR, "stationary")
-Z_SCORE_OHLCV_DIR = os.path.join(STATIONARY_DIR, "ohlcv-normalized")
-Z_SCORE_WICK_DIR = os.path.join(STATIONARY_DIR, "wick-normalized")
-Z_SCORE_INDICATOR_DIR = os.path.join(STATIONARY_DIR, "indicators")
+NORMALIZED_DIR = os.path.join(PROCESSED_DIR, "normalized")
+Z_SCORE_OHLCV_DIR = os.path.join(NORMALIZED_DIR, "ohlcv")
+Z_SCORE_WICK_DIR = os.path.join(NORMALIZED_DIR, "wick")
+Z_SCORE_INDICATOR_DIR = os.path.join(NORMALIZED_DIR, "indicators")
 
 WARMUP_ROWS = 33
 DATASET_SPLITS = ["train", "val", "test"]
@@ -88,7 +88,7 @@ def build_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def save_separate_indicator_files(df: pd.DataFrame, split: str):
-    sep_dir = os.path.join(NORMAL_INDICATOR_DIR, split)
+    sep_dir = os.path.join(INDICATOR_DIR, split)
     os.makedirs(sep_dir, exist_ok=True)
     grouped = {
         "macd": ["macd", "macd_signal", "macd_histogram"],
@@ -159,13 +159,13 @@ def apply_indicator_zscore(df: pd.DataFrame, params):
     return pd.concat([atr, macd, macd_signal, macd_histogram, rsi], axis=1)
 
 def save_candlesticks(df: pd.DataFrame, split) -> None:
-    os.makedirs(NORMAL_DIR, exist_ok=True)
-    df.to_csv(f"{NORMAL_DIR}/{split}.csv", index=False)
+    os.makedirs(NON_NORMAL_DIR, exist_ok=True)
+    df.to_csv(f"{NON_NORMAL_DIR}/{split}.csv", index=False)
 
 
 def save_stationary_data(df: pd.DataFrame, split) -> None:
-    os.makedirs(STATIONARY_DIR, exist_ok=True)
-    df.to_csv(f"{STATIONARY_DIR}/{split}.csv", index=False)
+    os.makedirs(NORMALIZED_DIR, exist_ok=True)
+    df.to_csv(f"{NORMALIZED_DIR}/{split}.csv", index=False)
 
 
 def drop_warmup_rows(df: pd.DataFrame):

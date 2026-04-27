@@ -37,8 +37,8 @@ PARAMS = {
 filepath = os.path.abspath("test/raw_unit_test.csv")
 os.makedirs("data/raw/unit_test", exist_ok=True)
 shutil.copyfile(filepath, "data/raw/unit_test/raw_unit_test.csv")
-shutil.copyfile(filepath, "data/processed/stationary/indicators/unit_test.csv")
-shutil.copyfile(filepath, "data/processed/stationary/ohlcv-normalized/unit_test.csv")
+shutil.copyfile(filepath, "data/processed/normalized/indicators/unit_test.csv")
+shutil.copyfile(filepath, "data/processed/normalized/ohlcv/unit_test.csv")
 
 raw = dp.load_split(SPLIT)
 stat = dp.make_stationary(raw)

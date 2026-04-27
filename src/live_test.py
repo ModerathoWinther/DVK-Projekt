@@ -3,12 +3,12 @@ import os
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
+import json
 import datetime
 import MetaTrader5 as mt5
 import pandas as pd
 import torch
 import yaml
-import data_process as dp
 from action_space import Direction, ACTION_SPACE
 from dqn import DQN
 
@@ -35,8 +35,10 @@ class LiveTest:
         self.macd = params.get('macd')
         self.rsi = params.get('rsi')
         self.data_format = params.get('data_format')
+        self.price_mean = 0
+        self.price_std = 0
 
-
+        self.z_scores = self._load_z_score_params()
 
         self.MODEL_FILE = os.path.join(RESULTS_DIR, f'{self.env_id}.pt')
         self.LOG_FILE = os.path.join(RESULTS_DIR, f'{self.env_id}.log')
@@ -72,6 +74,25 @@ class LiveTest:
         final_df = df[['open', 'high', 'low', 'close', 'volume']]
         return final_df
 
+    def _load_z_score_params(self):
+        with open('z_scores.json', 'r') as file:
+            all_params = json.load(file)
+
+        active_params = {}
+
+        if self.data_format == 'ohlcv':
+            active_params['ohlc'] = all_params['ohlc']
+            active_params['volume'] = all_params['volume']
+        elif self.data_format == 'wick':
+            active_params['wick'] = all_params['wick']
+            active_params['volume'] = all_params['volume']
+
+        if self.atr: active_params['atr'] = all_params['atr']
+        if self.macd: active_params['macd'] = all_params['macd']
+        if self.rsi: active_params['rsi'] = all_params['rsi']
+
+        return active_params
+
     def send_order(self, action):
         if action.direction == Direction.HOLD:
             return -1
@@ -98,7 +119,6 @@ class LiveTest:
             "type_time": mt5.ORDER_TIME_SPECIFIED,
             "expiration": self.time_end
         }
-
     def run(self):
         # Loop
 

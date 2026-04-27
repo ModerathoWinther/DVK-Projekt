@@ -1,6 +1,5 @@
 import argparse
 import os
-
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 import json
@@ -11,6 +10,8 @@ import torch
 import yaml
 from action_space import Direction, ACTION_SPACE
 from dqn import DQN
+import data_process as dp
+import indicators as ind
 
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
@@ -23,18 +24,19 @@ class LiveTest:
             all_hyperparameter_sets = yaml.safe_load(file)
             params = all_hyperparameter_sets[params]
 
-        self.time_start = datetime.now()
+        self.time_start = datetime.datetime.now()
         self.next_time_frame = self.time_start
         self.time_end = self.time_start + datetime.timedelta(minutes=15)
         self.parameters = params.get('')
         self.env_id = params.get('env_id')
-        self.num_trades = params.get('num_trades')
+        self.env_params = params.get('env_make_params')
         self.fc1_nodes = params.get('fc1_nodes')
         self.enable_dueling_dqn = params.get('enable_dueling_dqn')
-        self.atr = params.get('atr')
-        self.macd = params.get('macd')
-        self.rsi = params.get('rsi')
-        self.data_format = params.get('data_format')
+        self.num_trades = self.env_params['num_trades']
+        self.atr = self.env_params['atr']
+        self.macd = self.env_params['macd']
+        self.rsi = self.env_params['rsi']
+        self.data_format = self.env_params['data_format']
         self.price_mean = 0
         self.price_std = 0
 
@@ -45,37 +47,43 @@ class LiveTest:
 
         self.num_actions = len(ACTION_SPACE)
         self.num_states = self._get_num_states()
-
+        print(self.num_actions, self.num_states)
         self.dqn = DQN(self.num_states, self.num_actions, self.fc1_nodes, self.enable_dueling_dqn).to(DEVICE)
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
-
-
+        self.input_data = self._process_data(self.get_market_data())
         print(self.time_start)
         print(self.time_end)
         print(self.get_market_data())
         self.send_order(ACTION_SPACE[2])
 
+    def _process_data(self, df: pd.DataFrame) -> pd.DataFrame:
+
+        return df
+
     def _get_num_states(self):
         n_states = 0
         if self.atr: n_states += 1
+        if self.macd: n_states += 3
         if self.rsi: n_states += 1
-        if self.macd: n_states += 1
         n_states += 5 if self.data_format == 'ohlcv' else 4
         n_states += self.num_trades * 3
         return n_states
 
 
-    def get_market_data(self):
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M1, 0, 1)
+    def get_market_data(self) -> pd.DataFrame:
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, dp.WARMUP_ROWS)
         df = pd.DataFrame(rates)
-        df = df.rename(columns={'tick_volume': 'volume'})
-        final_df = df[['open', 'high', 'low', 'close', 'volume']]
-        return final_df
+        df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
+        df['date'] = pd.to_datetime(df['date'], unit='s')
+        df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
+        return df
 
     def _load_z_score_params(self):
-        with open('z_scores.json', 'r') as file:
+
+        path = os.path.join(f'{dp.NORMALIZED_DIR}/zscores.json')
+        with open(path, 'r') as file:
             all_params = json.load(file)
 
         active_params = {}
@@ -89,8 +97,8 @@ class LiveTest:
 
         if self.atr: active_params['atr'] = all_params['atr']
         if self.macd: active_params['macd'] = all_params['macd']
-        if self.rsi: active_params['rsi'] = all_params['rsi']
 
+        print(f'\n\nactive_params: {active_params}\n\n')
         return active_params
 
     def send_order(self, action):
@@ -119,6 +127,7 @@ class LiveTest:
             "type_time": mt5.ORDER_TIME_SPECIFIED,
             "expiration": self.time_end
         }
+
     def run(self):
         # Loop
 
@@ -138,8 +147,9 @@ class LiveTest:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MT5 login details.')
     parser.add_argument('hyperparameters', help='')
-    parser.add_argument(action='store_true')
+    # parser.add_argument(action='store_true')
     args = parser.parse_args()
-
+    # mt5.initialize(args.mt5_details)
+    mt5.initialize()
     midas = LiveTest(params=args.hyperparameters)
-    mt5.initialize(args.mt5_details)
+

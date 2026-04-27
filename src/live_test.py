@@ -56,12 +56,13 @@ class LiveTest:
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
-        self.input_data = self._process_data(self.get_market_data())
+        self.input_data = self.get_market_data()
         print(self.time_start)
         print(self.time_end)
         print(self.get_market_data())
         self.send_order(ACTION_SPACE[2])
-
+        print(self._compute_indicators(self.input_data))
+        print(self._normalize_ohlcv(self.input_data))
 
 
     def _get_num_states(self):
@@ -82,6 +83,16 @@ class LiveTest:
         df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
         return df
 
+    def _compute_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        ind.atr(df)
+        if self.macd:
+            ind.macd(df)
+        if self.rsi:
+            ind.rsi(df)
+        df = df.dropna().reset_index(drop=True)
+        return df
+
     def _normalize_ohlcv(self, df: pd.DataFrame) -> np.ndarray:
         p = self.z_scores
         if self.data_format == 'ohlcv':
@@ -95,22 +106,8 @@ class LiveTest:
                 (row['close']  - ohlc_mean) / (ohlc_std  + 1e-8),
                 (row['volume'] - vol_mean)  / (vol_std   + 1e-8),
             ], dtype=np.float32)
-        else:  # wick
-            row = df.iloc[-1]
-            high_wick = row['high']  - row['open']
-            low_wick  = row['open']  - row['low']
-            trend     = row['close'] - row['open']
-            features  = {'high_wick': high_wick, 'low_wick': low_wick,
-                         'trend': trend, 'volume': row['volume']}
-            result = []
-            for col in ['high_wick', 'low_wick', 'trend']:
-                m = self.z_scores['wick'][col]['mean']
-                s = self.z_scores['wick'][col]['std']
-                result.append((features[col] - m) / (s + 1e-8))
-            vol_mean = self.z_scores['volume']['mean']
-            vol_std  = self.z_scores['volume']['std']
-            result.append((row['volume'] - vol_mean) / (vol_std + 1e-8))
-            return np.array(result, dtype=np.float32)
+        # wick
+        else: return np.array(df, dtype=np.float32)
 
     def _load_z_score_params(self):
 

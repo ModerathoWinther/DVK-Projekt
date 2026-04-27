@@ -190,6 +190,7 @@ def run():
     for split, df in splits_raw.items():
         print(f"\n  Building indicators for {split}...")
         splits_indicators[split] = build_indicators(df.copy())
+        save_separate_indicator_files(splits_indicators[split], split)
 
     splits_trimmed = {
         split: drop_warmup_rows(df) for split, df in splits_raw.items()

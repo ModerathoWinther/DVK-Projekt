@@ -1,4 +1,5 @@
 import os
+import json
 import pandas as pd
 import data_fetch
 import indicators as ind
@@ -13,7 +14,6 @@ NORMALIZED_DIR = os.path.join(PROCESSED_DIR, "normalized")
 Z_SCORE_OHLCV_DIR = os.path.join(NORMALIZED_DIR, "ohlcv")
 Z_SCORE_WICK_DIR = os.path.join(NORMALIZED_DIR, "wick")
 Z_SCORE_INDICATOR_DIR = os.path.join(NORMALIZED_DIR, "indicators")
-
 
 WARMUP_ROWS = 33
 DATASET_SPLITS = ["train", "val", "test"]
@@ -178,7 +178,8 @@ def save_frames_to_csv(df: pd.DataFrame, directory: str, split: str) -> None:
 
 
 def save_zscore_params_to_json(params):
-    return 0
+    with open(f'{NORMALIZED_DIR}/zscores.json', 'w') as f:
+        json.dump(params, f, ensure_ascii=False)
 
 
 def run():
@@ -205,6 +206,7 @@ def run():
     print("\n  Fitting normalisation params on train split...")
     train_wick = to_wick_format(splits_trimmed["train"])
     params = compute_zscore_params(splits_trimmed["train"], train_wick, splits_indicators["train"])
+    save_zscore_params_to_json(params)
 
     for split in DATASET_SPLITS:
         print(f"\n  Normalising {split} with train mean/std...")

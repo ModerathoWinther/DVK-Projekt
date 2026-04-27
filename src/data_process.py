@@ -107,113 +107,56 @@ def save_separate_indicator_files(df: pd.DataFrame, split: str):
 
     return indicator_dfs
 
-def compute_wick_zscore_params(df_wick: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+def compute_zscore_params(ohlc_df: pd.DataFrame, wick_df: pd.DataFrame, ind_df: pd.DataFrame):
+    ohlc_values = ohlc_df[['open', 'high', 'low', 'close']].values.flatten()
+    wick_values = wick_df[['high_wick', 'low_wick', 'trend']].values.flatten()
 
-    ref_mean = df_wick["trend"].mean()
-    ref_std  = df_wick["trend"].std()
+    params = {
+        "ohlc": (ohlc_values.mean(), ohlc_values.std()),
+        "wick": (wick_values.mean(), wick_values.std()),
+        "volume": (ohlc_df['volume'].mean(), ohlc_df['volume'].std()),
+        "atr": (ind_df['atr'].mean(), ind_df['atr'].std()),
+        "macd": (ind_df['macd'].mean(), ind_df['macd'].std()),
+        "macd_signal": (ind_df['macd_signal'].mean(), ind_df['macd_signal'].std()),
+        "macd_histogram": (ind_df['macd_histogram'].mean(), ind_df['macd_histogram'].std()),
+    }
+    return params
 
-    vol_mean = df_wick["volume"].mean()
-    vol_std  = df_wick["volume"].std()
+def apply_zscore(df: pd.DataFrame, params, param_key: str, cols: list[str]):
+    mean, std = params.get(param_key)
+    df[cols] = (df[cols] - mean) / std + 1e-8
 
-    wick_mean = pd.Series({
-        "high_wick": 0.0,
-        "low_wick":  0.0,
-        "trend":     ref_mean,
-        "volume":    vol_mean,
-    })
-    wick_std = pd.Series({
-        "high_wick": ref_std,
-        "low_wick":  ref_std,
-        "trend":     ref_std,
-        "volume":    vol_std,
-    })
+def apply_wick_zscore(df: pd.DataFrame, params):
+    cols = ["high_wick", "low_wick", "trend"]
+    df_wick = df[["date"] + cols].copy().set_index("date")
+    df_vol = df[["date", "volume"]].copy().set_index("date")
 
-    print("\n  Wick Z-score params (fit on train):")
-    for col in ["high_wick", "low_wick", "trend", "volume"]:
-        print(f"    {col:<12}  mean={wick_mean[col]:>12.6f}   std={wick_std[col]:>12.6f}")
+    apply_zscore(df_wick, params, "wick", cols)
+    apply_zscore(df_vol, params, "volume", ["volume"])
+    return pd.concat([df_wick, df_vol], axis=1)
 
-    return wick_mean, wick_std
+def apply_ohlcv_zscore(df: pd.DataFrame, params):
+    cols = ["open", "high", "low", "close"]
+    df_ohlc = df[["date"] + cols].copy().set_index("date")
+    df_vol = df[["date", "volume"]].copy().set_index("date")
 
-def compute_price_zscore_params(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-    price_cols = ["open", "high", "low", "close", "volume"]
-    price_mean = df[price_cols].mean()
-    price_std = df[price_cols].std()
+    apply_zscore(df_ohlc, params, "ohlc", cols)
+    apply_zscore(df_vol, params, "volume", ["volume"])
+    return pd.concat([df_ohlc, df_vol], axis=1)
 
-    for col in price_cols:
-        print(f"    {col:<8}  mean={price_mean[col]:>12.4f}   std={price_std[col]:>12.4f}")
+def apply_indicator_zscore(df: pd.DataFrame, params):
+    atr = df[["date", "atr"]].copy().set_index("date")
+    macd = df[["date", "macd"]].copy().set_index("date")
+    macd_signal = df[["date", "macd_signal"]].copy().set_index("date")
+    macd_histogram = df[["date", "macd_histogram"]].copy().set_index("date")
+    rsi = df[["date", "rsi"]].copy().set_index("date")
 
-    return price_mean, price_std
-
-def compute_indicator_zscore_params(df: pd.DataFrame,
-                                    price_mean: pd.Series,
-                                    price_std: pd.Series) -> tuple[pd.Series, pd.Series]:
-
-    ref_mean = price_mean["close"]
-    ref_std  = price_std["close"]
-
-    price_unit_cols = ["atr", "macd", "macd_signal", "macd_histogram"]
-
-    rsi_mean = df["rsi"].mean()
-    rsi_std  = df["rsi"].std()
-
-    ind_mean = pd.Series({
-        "atr":            ref_mean,
-        "macd":           ref_mean,
-        "macd_signal":    ref_mean,
-        "macd_histogram": ref_mean,
-        "rsi":            rsi_mean,
-    })
-    ind_std = pd.Series({
-        "atr":            ref_std,
-        "macd":           ref_std,
-        "macd_signal":    ref_std,
-        "macd_histogram": ref_std,
-        "rsi":            rsi_std,
-    })
-
-    print("\n  Indicator Z-score params (fit on train):")
-    for col in ["atr", "macd", "macd_signal", "macd_histogram", "rsi"]:
-        print(f"    {col:<16}  mean={ind_mean[col]:>12.4f}   std={ind_std[col]:>12.4f}")
-
-    return ind_mean, ind_std
-
-def apply_wick_zscore(df_wick: pd.DataFrame,
-                      wick_mean: pd.Series,
-                      wick_std: pd.Series) -> pd.DataFrame:
-    cols = ["high_wick", "low_wick", "trend", "volume"]
-    df_out = df_wick[["date"] + cols].copy()
-
-    for col in cols:
-        df_out[col] = (df_wick[col] - wick_mean[col]) / (wick_std[col] + 1e-8)
-
-    return df_out
-
-def apply_price_zscore(df: pd.DataFrame, price_mean: pd.Series, price_std: pd.Series) -> pd.DataFrame:
-    price_cols = ["open", "high", "low", "close", "volume"]
-    df_out = df[["date"] + price_cols].copy()
-
-    ref_mean = price_mean["close"]
-    ref_std  = price_std["close"] + 1e-8
-
-    for col in ["open", "high", "low", "close"]:
-        df_out[col] = (df[col] - ref_mean) / ref_std
-
-    df_out["volume"] = (df["volume"] - price_mean["volume"]) / (price_std["volume"] + 1e-8)
-
-    return df_out
-
-
-def apply_indicator_zscore(df: pd.DataFrame,
-                           ind_mean: pd.Series,
-                           ind_std: pd.Series) -> pd.DataFrame:
-    indicator_cols = ["atr", "macd", "macd_signal", "macd_histogram", "rsi"]
-    df_out = df[["date"] + indicator_cols].copy()
-
-    for col in indicator_cols:
-        df_out[col] = (df[col] - ind_mean[col]) / (ind_std[col] + 1e-8)
-
-    return df_out
-
+    apply_zscore(atr, params, "atr", ["atr"])
+    apply_zscore(macd, params, "macd", ["macd"])
+    apply_zscore(macd_signal, params, "macd_signal", ["macd_signal"])
+    apply_zscore(macd_histogram, params, "macd_histogram", ["macd_histogram"])
+    # RSI is divided by 100 instead
+    return pd.concat([atr, macd, macd_signal, macd_histogram, rsi], axis=1)
 
 def save_candlesticks(df: pd.DataFrame, split) -> None:
     os.makedirs(NORMAL_DIR, exist_ok=True)
@@ -257,12 +200,12 @@ def run():
         save_stationary_data(make_stationary(df), split)
 
     print("\n  Fitting normalisation params on train split...")
-    price_mean, price_std = compute_price_zscore_params(splits_trimmed["train"])
-    ind_mean, ind_std     = compute_indicator_zscore_params(
-                                splits_indicators["train"], price_mean, price_std)
-
     train_wick = make_stationary(splits_trimmed["train"])
-    wick_mean, wick_std   = compute_wick_zscore_params(train_wick)
+    params = compute_zscore_params(splits_trimmed["train"], train_wick, splits_indicators["train"])
+
+    print(apply_wick_zscore(train_wick, params))
+    print(apply_ohlcv_zscore(splits_trimmed["train"], params))
+    print(apply_indicator_zscore(splits_indicators["train"], params))
 
     for split in DATASET_SPLITS:
         print(f"\n  Normalising {split} with train mean/std...")

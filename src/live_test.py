@@ -1,5 +1,8 @@
 import argparse
 import os
+
+import numpy as np
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 import json
@@ -15,6 +18,7 @@ import indicators as ind
 
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
+WARMuP_BARS = dp.WARMUP_ROWS + 1
 
 class LiveTest:
 
@@ -58,9 +62,7 @@ class LiveTest:
         print(self.get_market_data())
         self.send_order(ACTION_SPACE[2])
 
-    def _process_data(self, df: pd.DataFrame) -> pd.DataFrame:
 
-        return df
 
     def _get_num_states(self):
         n_states = 0
@@ -73,12 +75,42 @@ class LiveTest:
 
 
     def get_market_data(self) -> pd.DataFrame:
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, dp.WARMUP_ROWS)
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, WARMuP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
         df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
         return df
+
+    def _normalize_ohlcv(self, df: pd.DataFrame) -> np.ndarray:
+        p = self.z_scores
+        if self.data_format == 'ohlcv':
+            ohlc_mean, ohlc_std = p['ohlc'][0], p['ohlc'][1]
+            vol_mean, vol_std  = p['volume'][0], p['volume'][1]
+            row = df.iloc[-1]
+            return np.array([
+                (row['open']   - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['high']   - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['low']    - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['close']  - ohlc_mean) / (ohlc_std  + 1e-8),
+                (row['volume'] - vol_mean)  / (vol_std   + 1e-8),
+            ], dtype=np.float32)
+        else:  # wick
+            row = df.iloc[-1]
+            high_wick = row['high']  - row['open']
+            low_wick  = row['open']  - row['low']
+            trend     = row['close'] - row['open']
+            features  = {'high_wick': high_wick, 'low_wick': low_wick,
+                         'trend': trend, 'volume': row['volume']}
+            result = []
+            for col in ['high_wick', 'low_wick', 'trend']:
+                m = self.z_scores['wick'][col]['mean']
+                s = self.z_scores['wick'][col]['std']
+                result.append((features[col] - m) / (s + 1e-8))
+            vol_mean = self.z_scores['volume']['mean']
+            vol_std  = self.z_scores['volume']['std']
+            result.append((row['volume'] - vol_mean) / (vol_std + 1e-8))
+            return np.array(result, dtype=np.float32)
 
     def _load_z_score_params(self):
 

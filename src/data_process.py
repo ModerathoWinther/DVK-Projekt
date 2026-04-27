@@ -203,22 +203,18 @@ def run():
     train_wick = make_stationary(splits_trimmed["train"])
     params = compute_zscore_params(splits_trimmed["train"], train_wick, splits_indicators["train"])
 
-    print(apply_wick_zscore(train_wick, params))
-    print(apply_ohlcv_zscore(splits_trimmed["train"], params))
-    print(apply_indicator_zscore(splits_indicators["train"], params))
-
     for split in DATASET_SPLITS:
         print(f"\n  Normalising {split} with train mean/std...")
 
-        ohlcv_norm = apply_price_zscore(splits_trimmed[split], price_mean, price_std)
+        ohlcv_norm = apply_ohlcv_zscore(splits_trimmed[split], params)
         save_frames_to_csv(ohlcv_norm, Z_SCORE_OHLCV_DIR, split)
 
         wick_df   = make_stationary(splits_trimmed[split])
-        wick_norm = apply_wick_zscore(wick_df, wick_mean, wick_std)
+        wick_norm = apply_wick_zscore(wick_df, params)
         save_frames_to_csv(wick_norm, Z_SCORE_WICK_DIR, split)
 
         ind_trimmed = drop_warmup_rows(splits_indicators[split])
-        ind_norm    = apply_indicator_zscore(ind_trimmed, ind_mean, ind_std)
+        ind_norm    = apply_indicator_zscore(ind_trimmed, params)
         save_frames_to_csv(ind_norm, Z_SCORE_INDICATOR_DIR, split)
 
 

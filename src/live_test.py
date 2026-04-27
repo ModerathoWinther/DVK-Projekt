@@ -64,7 +64,6 @@ class LiveTest:
         print(self._compute_indicators(self.input_data))
         print(self._normalize_ohlcv(self.input_data))
 
-
     def _get_num_states(self):
         n_states = 0
         if self.atr: n_states += 1
@@ -95,10 +94,11 @@ class LiveTest:
 
     def _normalize_ohlcv(self, df: pd.DataFrame) -> np.ndarray:
         p = self.z_scores
+        row = df.iloc[-1]
+        vol_mean, vol_std = p['volume'][0], p['volume'][1]
+
         if self.data_format == 'ohlcv':
             ohlc_mean, ohlc_std = p['ohlc'][0], p['ohlc'][1]
-            vol_mean, vol_std  = p['volume'][0], p['volume'][1]
-            row = df.iloc[-1]
             return np.array([
                 (row['open']   - ohlc_mean) / (ohlc_std  + 1e-8),
                 (row['high']   - ohlc_mean) / (ohlc_std  + 1e-8),
@@ -107,7 +107,18 @@ class LiveTest:
                 (row['volume'] - vol_mean)  / (vol_std   + 1e-8),
             ], dtype=np.float32)
         # wick
-        else: return np.array(df, dtype=np.float32)
+        else:
+            wick_mean, wick_std = p['wick'][0], p['wick'][1]
+            high_wick = row['high'] - row['open']
+            low_wick = row['open'] - row['low']
+            trend = row['close'] - row['open']
+
+            return np.array([
+                (high_wick - wick_mean) / (wick_std  + 1e-8),
+                (low_wick   - wick_mean) / (wick_std  + 1e-8),
+                (trend    - wick_mean) / (wick_std  + 1e-8),
+                (row['volume'] - vol_mean)  / (vol_std   + 1e-8),
+            ], dtype=np.float32)
 
     def _load_z_score_params(self):
 

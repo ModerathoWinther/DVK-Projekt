@@ -64,15 +64,12 @@ class LiveTest:
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
-        self.input_data = self.get_market_data()
+        self.input_data = self._get_input_data()
+        print(f'input_data: {self.input_data}')
         print(self.time_start)
         print(self.time_end)
-        print(self.get_market_data())
         self.send_order(ACTION_SPACE[2])
-        self.input_data = self._compute_indicators(self.input_data)
-        print(f'\n\n after _compute_indicators(): {self.input_data}\n\n')
-        self.input_data = self._normalize_input(self.input_data)
-        print(f'Input data after _normalize_price(): {self.input_data}')
+
 
     def _get_num_states(self):
         n_states = 0
@@ -82,6 +79,11 @@ class LiveTest:
         n_states += 5 if self.data_format == 'ohlcv' else 4
         n_states += self.num_trades * 3
         return n_states
+
+    def _get_input_data(self):
+        df = self.get_market_data()
+        df = self._compute_indicators(df)
+        return self._normalize_input(df)
 
     def get_market_data(self) -> pd.DataFrame:
         rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M1, 0, WARMUP_BARS)

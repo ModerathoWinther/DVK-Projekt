@@ -105,12 +105,12 @@ class LiveTest:
         params = self.z_scores
 
         if self.data_format == 'ohlcv':
-            dp.apply_zscore(df, params, 'ohlc', ['open', 'high', 'low', 'close'])
             dp.apply_zscore(df, params, 'volume', ['volume'])
+            dp.apply_zscore(df, params, 'ohlc', ['open', 'high', 'low', 'close'])
         else:
             wicks = dp.to_wick_format(df)
             dp.apply_zscore(wicks, params, 'wick', ['high_wick', 'low_wick', 'trend'])
-
+            dp.apply_zscore(wicks, params, 'volume', ['volume'])
             drop_cols = {'date', 'open', 'high', 'low', 'close', 'volume'}
             non_ohlc_cols = [c for c in df.columns if c not in drop_cols]
             df = pd.concat([wicks, df[non_ohlc_cols].reset_index(drop=True)], axis=1)

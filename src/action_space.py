@@ -20,6 +20,7 @@ class Action:
 SL_LEVELS = [0.001, 0.003, 0.006]
 TP_LEVELS = [0.002, 0.006, 0.012]
 HOLD_ACTION = Action(Direction.HOLD, None, None, 0)
+BUY_HOLD_ACTION = Action(Direction.BUY, 0, 0, -1)
 
 i = 1
 ACTION_SPACE = [HOLD_ACTION]

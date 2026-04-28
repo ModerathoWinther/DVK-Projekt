@@ -73,6 +73,7 @@ class TradingEnvironment(gym.Env):
         self.open_slots = self.num_trades
         self.trades_state = np.zeros((self.num_trades, 4), dtype=np.float32)
         self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
+        self.is_buy_hold = params.get('is_buy_hold')
 
         self.episode_results = []
 
@@ -153,17 +154,8 @@ class TradingEnvironment(gym.Env):
             reward += term_r
 
         else:
-            act = self.action_list[action]
-            if act.direction != Direction.HOLD and self.open_slots > 0:
-                open = self.prices[self.current_step][self.col_open]
-                entry_price = open
-                sl = entry_price - act.direction.value * (entry_price * act.sl)
-                tp = entry_price + act.direction.value * (entry_price * act.tp)
-                for i in range(self.num_trades):
-                    if self.trades_state[i, 0] == 0:
-                        self.trades_state[i] = [act.direction.value, entry_price, sl, tp]
-                        self.open_slots -= 1
-                        break
+            action = self.action_list[action]
+            self._process_action(action)
 
         self._update_trades_obs(close)
         self.equity_curve.append(self.current_equity)
@@ -175,7 +167,22 @@ class TradingEnvironment(gym.Env):
             self.trades_obs.flatten()
         ]).astype(np.float32)
 
+    def _process_action(self, act: int):
+        if act.direction != Direction.HOLD and self.open_slots > 0:
+            open = self.prices[self.current_step][self.col_open]
+            entry_price = open
+            sl = entry_price - act.direction.value * (entry_price * act.sl)
+            tp = entry_price + act.direction.value * (entry_price * act.tp)
+            for i in range(self.num_trades):
+                if self.trades_state[i, 0] == 0:
+                    self.trades_state[i] = [act.direction.value, entry_price, sl, tp]
+                    self.open_slots -= 1
+                    break
+
     def _process_trades(self, open: float, high: float, low: float) -> tuple[float, int]:
+        if self.is_buy_hold:
+            return 0, 0
+
         total_realized_pnl = 0.0
         closed = 0
         for i in range(self.num_trades):

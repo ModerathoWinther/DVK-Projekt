@@ -21,8 +21,8 @@ DEVICE = 'cpu'
 RESULTS_DIR = 'results'
 WARMUP_BARS = dp.WARMUP_ROWS + 1
 
-class LiveTest:
 
+class LiveTest:
 
     def __init__(self, params):
         with open('hyperparameters.yml', 'r') as file:
@@ -38,6 +38,7 @@ class LiveTest:
         self.time_frame_minute_size = live_test_params.get('time_frame_minute_size')
         self.time_end = (self.time_start +
                          datetime.timedelta(minutes=live_test_params.get('test_minute_length')))
+        self.trading_vol = live_test_params.get('trading_volume')
 
         self.env_id = params.get('env_id')
         self.env_params = params.get('env_make_params')
@@ -82,9 +83,8 @@ class LiveTest:
         n_states += self.num_trades * 3
         return n_states
 
-
     def get_market_data(self) -> pd.DataFrame:
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, WARMUP_BARS)
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
@@ -129,6 +129,7 @@ class LiveTest:
             df['rsi'] = df['rsi'] / 100.0
 
         return df
+
     def _load_z_score_params(self):
 
         path = os.path.join(f'{dp.NORMALIZED_DIR}/zscores.json')
@@ -154,7 +155,8 @@ class LiveTest:
 
     def send_order(self, action):
         if action.direction == Direction.HOLD:
-            return -1
+            print(f"[{datetime.datetime.now()}] HOLD POSITION:")
+            return 1
 
         sl = tp = 0
         order_type = None
@@ -172,19 +174,32 @@ class LiveTest:
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
+            "volume": self.trading_vol,
             "type": order_type,
             "sl": sl,
             "tp": tp,
-            "type_time": mt5.ORDER_TIME_SPECIFIED,
-            "expiration": self.time_end
         }
 
+        result = mt5.order_send(request)
+
+        if result is None:
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {mt5.last_error()}")
+            return -1
+        elif result.retcode != mt5.TRADE_RETCODE_DONE:
+            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
+            return -1
+        else:
+            print(f"ORDER PLACED")
+            return 1
+
+    def close_all_positions(self):
+        for pos in mt5.positions_get():
+            mt5.Close(symbol="XAUUSD", ticket=pos.ticket)
+
     def run(self):
-        print()
-        print(f"PROGRAM START: {datetime.datetime.now()}")
+        print(f"\nPROGRAM START: {datetime.datetime.now()}")
         print(f"TRADE START: {self.time_start}")
-        print(f"TRADE END: {self.time_end}")
-        print()
+        print(f"TRADE END: {self.time_end}\n")
 
         while True:
             if datetime.datetime.now() > self.next_time_frame:
@@ -193,21 +208,23 @@ class LiveTest:
                 # todo Translate in-data to format used in training (normalize, etc)
 
                 # todo Let model decide action to take
+                action = ACTION_SPACE[0]
+                if mt5.positions_total() < self.num_trades:
+                    self.send_order(action)
 
-                # use send_order to send orders via MetaTrader, only if mt5.positions_total() < 5
-
-                print(f"[{datetime.datetime.now()}] TRADE DONE")
                 if self.next_time_frame >= self.time_end:
                     break
                 self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
             else:
                 sleep(0.01)
 
+        self.close_all_positions()
+        print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
+
         # todo Use history_deals_get or history_orders_get to extract results (not really sure if they work)
-        print()
-        print(f"TRADING FINISHED AT: {datetime.datetime.now()}")
 
         return 1
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MT5 login details.')
@@ -216,7 +233,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # mt5.initialize(args.mt5_details)
     mt5.initialize()
-    print(mt5.symbol_info("XAUUSD"))
     midas = LiveTest(params=args.hyperparameters)
     midas.run()
-

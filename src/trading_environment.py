@@ -29,6 +29,7 @@ class TradingEnvironment(gym.Env):
 
         self.data_format = params.get('data_format')
         self.input_data, self.prices = init_state.run(**params)
+        self.val_input_data = init_state.get_input_data('val', self.data_format)
         self.data_length = len(self.input_data)
 
         if self.episode_length is None or self.episode_length >= self.data_length:

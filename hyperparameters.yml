@@ -23,6 +23,7 @@ midas-train1:
     time_start: "2026-04-28 01:52:00"
     time_frame_minute_size: 1
     test_minute_length: 3
+    trading_volume: 1
   env_id: 'midas-train1'
   learning_rate_a: 0.0002
   epsilon_init: 1.0

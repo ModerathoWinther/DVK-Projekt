@@ -38,6 +38,7 @@ class LiveTest:
         self.time_frame_minute_size = live_test_params.get('time_frame_minute_size')
         self.time_end = (self.time_start +
                          datetime.timedelta(minutes=live_test_params.get('test_minute_length')))
+        self.trading_vol = live_test_params.get('trading_volume')
 
         self.env_id = params.get('env_id')
         self.env_params = params.get('env_make_params')
@@ -154,7 +155,8 @@ class LiveTest:
 
     def send_order(self, action):
         if action.direction == Direction.HOLD:
-            return -1
+            print(f"[{datetime.datetime.now()}] HOLD POSITION:")
+            return 1
 
         sl = tp = 0
         order_type = None
@@ -172,7 +174,7 @@ class LiveTest:
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
-            "volume": self.volume,
+            "volume": self.trading_vol,
             "type": order_type,
             "sl": sl,
             "tp": tp,
@@ -195,11 +197,9 @@ class LiveTest:
             mt5.Close(symbol="XAUUSD", ticket=pos.ticket)
 
     def run(self):
-        print()
-        print(f"PROGRAM START: {datetime.datetime.now()}")
+        print(f"\nPROGRAM START: {datetime.datetime.now()}")
         print(f"TRADE START: {self.time_start}")
-        print(f"TRADE END: {self.time_end}")
-        print()
+        print(f"TRADE END: {self.time_end}\n")
 
         while True:
             if datetime.datetime.now() > self.next_time_frame:
@@ -218,9 +218,10 @@ class LiveTest:
             else:
                 sleep(0.01)
 
+        self.close_all_positions()
+        print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
+
         # todo Use history_deals_get or history_orders_get to extract results (not really sure if they work)
-        print()
-        print(f"TRADING FINISHED AT: {datetime.datetime.now()}")
 
         return 1
 
@@ -232,6 +233,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # mt5.initialize(args.mt5_details)
     mt5.initialize()
-    print(mt5.symbol_info("XAUUSD"))
     midas = LiveTest(params=args.hyperparameters)
     midas.run()

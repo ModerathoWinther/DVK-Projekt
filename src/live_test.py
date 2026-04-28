@@ -69,8 +69,10 @@ class LiveTest:
         print(self.time_end)
         print(self.get_market_data())
         self.send_order(ACTION_SPACE[2])
-        print(self._compute_indicators(self.input_data))
-        print(self._normalize_ohlcv(self.input_data))
+        self.input_data = self._compute_indicators(self.input_data)
+        print(f'\n\n after _compute_indicators(): {self.input_data}\n\n')
+        self.input_data = self._normalize_input(self.input_data)
+        print(f'Input data after _normalize_price(): {self.input_data}')
 
     def _get_num_states(self):
         n_states = 0
@@ -100,34 +102,28 @@ class LiveTest:
         df = df.dropna().reset_index(drop=True)
         return df
 
-    def _normalize_ohlcv(self, df: pd.DataFrame) -> np.ndarray:
-        p = self.z_scores
-        row = df.iloc[-1]
-        vol_mean, vol_std = p['volume'][0], p['volume'][1]
+    def _normalize_input(self, df: pd.DataFrame) -> pd.DataFrame:
+        params = self.z_scores
+
+        dp.apply_zscore(df, params, 'volume', ['volume'])
 
         if self.data_format == 'ohlcv':
-            ohlc_mean, ohlc_std = p['ohlc'][0], p['ohlc'][1]
-            return np.array([
-                (row['open']   - ohlc_mean) / (ohlc_std  + 1e-8),
-                (row['high']   - ohlc_mean) / (ohlc_std  + 1e-8),
-                (row['low']    - ohlc_mean) / (ohlc_std  + 1e-8),
-                (row['close']  - ohlc_mean) / (ohlc_std  + 1e-8),
-                (row['volume'] - vol_mean)  / (vol_std   + 1e-8),
-            ], dtype=np.float32)
-        # wick
+            dp.apply_zscore(df, params, 'ohlc', ['open', 'high', 'low', 'close'])
         else:
-            wick_mean, wick_std = p['wick'][0], p['wick'][1]
-            high_wick = row['high'] - row['open']
-            low_wick = row['open'] - row['low']
-            trend = row['close'] - row['open']
+            dp.apply_zscore(df, params, 'wick', ['high_wick', 'low_wick', 'trend'])
 
-            return np.array([
-                (high_wick - wick_mean) / (wick_std  + 1e-8),
-                (low_wick   - wick_mean) / (wick_std  + 1e-8),
-                (trend    - wick_mean) / (wick_std  + 1e-8),
-                (row['volume'] - vol_mean)  / (vol_std   + 1e-8),
-            ], dtype=np.float32)
+        if self.atr:
+            dp.apply_zscore(df, params, 'atr', ['atr'])
 
+        if self.macd:
+            dp.apply_zscore(df, params, 'macd', ['macd'])
+            dp.apply_zscore(df, params, 'macd_signal', ['macd_signal'])
+            dp.apply_zscore(df, params, 'macd_histogram', ['macd_histogram'])
+
+        if self.rsi:
+            df['rsi'] = df['rsi'] / 100.0
+
+        return df
     def _load_z_score_params(self):
 
         path = os.path.join(f'{dp.NORMALIZED_DIR}/zscores.json')
@@ -137,16 +133,18 @@ class LiveTest:
         active_params = {}
 
         if self.data_format == 'ohlcv':
-            active_params['ohlc'] = all_params['ohlc']
-            active_params['volume'] = all_params['volume']
+            active_params['ohlc'] = [all_params['ohlc'][0], all_params['ohlc'][1]]
         elif self.data_format == 'wick':
-            active_params['wick'] = all_params['wick']
-            active_params['volume'] = all_params['volume']
+            active_params['wick'] = [all_params['wick'][0], all_params['wick'][1]]
+
+        active_params['volume'] = [all_params['volume'][0], all_params['volume'][1]]
 
         if self.atr: active_params['atr'] = all_params['atr']
-        if self.macd: active_params['macd'] = all_params['macd']
+        if self.macd:
+            active_params['macd'] = [all_params['macd'][0], all_params['macd'][1]]
+            active_params['macd_signal'] = [all_params['macd_signal'][0], all_params['macd_signal'][1]]
+            active_params['macd_histogram'] = [all_params['macd_histogram'][0], all_params['macd_histogram'][1]]
 
-        print(f'\n\nactive_params: {active_params}\n\n')
         return active_params
 
     def send_order(self, action):

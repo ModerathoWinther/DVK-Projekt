@@ -21,8 +21,8 @@ DEVICE = 'cpu'
 RESULTS_DIR = 'results'
 WARMUP_BARS = dp.WARMUP_ROWS + 1
 
-class LiveTest:
 
+class LiveTest:
 
     def __init__(self, params):
         with open('hyperparameters.yml', 'r') as file:
@@ -83,9 +83,8 @@ class LiveTest:
         n_states += self.num_trades * 3
         return n_states
 
-
     def get_market_data(self) -> pd.DataFrame:
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, WARMUP_BARS)
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
@@ -124,6 +123,7 @@ class LiveTest:
             df['rsi'] = df['rsi'] / 100.0
 
         return df
+
     def _load_z_score_params(self):
 
         path = os.path.join(f'{dp.NORMALIZED_DIR}/zscores.json')
@@ -167,12 +167,27 @@ class LiveTest:
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
+            "volume": self.volume,
             "type": order_type,
             "sl": sl,
             "tp": tp,
-            "type_time": mt5.ORDER_TIME_SPECIFIED,
-            "expiration": self.time_end
         }
+
+        result = mt5.order_send(request)
+
+        if result is None:
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {mt5.last_error()}")
+            return -1
+        elif result.retcode != mt5.TRADE_RETCODE_DONE:
+            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
+            return -1
+        else:
+            print(f"ORDER PLACED")
+            return 1
+
+    def close_all_positions(self):
+        for pos in mt5.positions_get():
+            mt5.Close(symbol="XAUUSD", ticket=pos.ticket)
 
     def run(self):
         print()
@@ -188,10 +203,10 @@ class LiveTest:
                 # todo Translate in-data to format used in training (normalize, etc)
 
                 # todo Let model decide action to take
+                action = ACTION_SPACE[0]
+                if mt5.positions_total() < self.num_trades:
+                    self.send_order(action)
 
-                # use send_order to send orders via MetaTrader, only if mt5.positions_total() < 5
-
-                print(f"[{datetime.datetime.now()}] TRADE DONE")
                 if self.next_time_frame >= self.time_end:
                     break
                 self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
@@ -204,6 +219,7 @@ class LiveTest:
 
         return 1
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MT5 login details.')
     parser.add_argument('hyperparameters', help='')
@@ -214,4 +230,3 @@ if __name__ == '__main__':
     print(mt5.symbol_info("XAUUSD"))
     midas = LiveTest(params=args.hyperparameters)
     midas.run()
-

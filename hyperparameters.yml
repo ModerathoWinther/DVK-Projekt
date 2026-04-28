@@ -9,6 +9,7 @@ midas-train1:
     transaction_cost: 0.0002
     data_format: "ohlcv"
     episode_length: 5000
+    is_buy_hold: False
   mt5_details:
     login: username
     password: password

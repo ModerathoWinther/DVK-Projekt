@@ -34,14 +34,15 @@ PARAMS = {
     "unit_test": True,
 }
 
-filepath = os.path.abspath("test/raw_unit_test.csv")
-os.makedirs("data/raw/unit_test", exist_ok=True)
-os.makedirs("data/processed/non_normalized/indicators/unit_test", exist_ok=True)
-shutil.copyfile(filepath, "data/raw/unit_test/raw_unit_test.csv")
-shutil.copyfile(filepath, "data/processed/non_normalized/indicators/unit_test/unit_test.csv")
-shutil.copyfile(filepath, "data/processed/non_normalized/unit_test.csv")
-shutil.copyfile(filepath, "data/processed/normalized/ohlcv/unit_test.csv")
-shutil.copyfile(filepath, "data/processed/normalized/indicators/unit_test.csv")
+curr_dir = os.path.abspath(os.path.dirname(__file__))
+filepath = os.path.join(curr_dir, "raw_unit_test.csv")
+os.makedirs(os.path.join(curr_dir, "../data/raw/unit_test"), exist_ok=True)
+os.makedirs(os.path.join(curr_dir, "../data/processed/non_normalized/indicators/unit_test"), exist_ok=True)
+shutil.copyfile(filepath, os.path.join(curr_dir, "../data/raw/unit_test/raw_unit_test.csv"))
+shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/non_normalized/indicators/unit_test/unit_test.csv"))
+shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/non_normalized/unit_test.csv"))
+shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/normalized/ohlcv/unit_test.csv"))
+shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/normalized/indicators/unit_test.csv"))
 
 
 class TestTradingEnvironment(unittest.TestCase):

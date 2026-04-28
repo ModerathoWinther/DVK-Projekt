@@ -10,7 +10,7 @@ def get_input_data(split, dataset):
     frames = [price, pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
                                  index_col="date", parse_dates=["date"])]
     input_data = pd.concat(frames, axis=1).dropna()
-    print(f"INIT_STATE WITH: Dataset: {dataset}\t|\tinput_data cols: {input_data.columns}")
+    print(f"INIT_STATE WITH: Dataset type: {dataset}\t|\tinput_data cols: {input_data.columns}, \tinput_data: {input_data}")
     return input_data.to_numpy()
 
 def get_prices(split):

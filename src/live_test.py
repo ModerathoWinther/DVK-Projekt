@@ -19,7 +19,7 @@ import indicators as ind
 
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
-WARMuP_BARS = dp.WARMUP_ROWS + 1
+WARMUP_BARS = dp.WARMUP_ROWS + 1
 
 class LiveTest:
 
@@ -84,7 +84,7 @@ class LiveTest:
 
 
     def get_market_data(self) -> pd.DataFrame:
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, WARMuP_BARS)
+        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M15, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
@@ -216,6 +216,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # mt5.initialize(args.mt5_details)
     mt5.initialize()
+    print(mt5.symbol_info("XAUUSD"))
     midas = LiveTest(params=args.hyperparameters)
     midas.run()
 

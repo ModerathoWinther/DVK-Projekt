@@ -39,7 +39,6 @@ class LiveTest:
         self.time_end = (self.time_start +
                          datetime.timedelta(minutes=live_test_params.get('test_minute_length')))
 
-        self.parameters = params.get('')
         self.env_id = params.get('env_id')
         self.env_params = params.get('env_make_params')
         self.fc1_nodes = params.get('fc1_nodes')
@@ -104,12 +103,18 @@ class LiveTest:
     def _normalize_input(self, df: pd.DataFrame) -> pd.DataFrame:
         params = self.z_scores
 
-        dp.apply_zscore(df, params, 'volume', ['volume'])
-
         if self.data_format == 'ohlcv':
             dp.apply_zscore(df, params, 'ohlc', ['open', 'high', 'low', 'close'])
+            dp.apply_zscore(df, params, 'volume', ['volume'])
         else:
-            dp.apply_zscore(df, params, 'wick', ['high_wick', 'low_wick', 'trend'])
+            wicks = dp.to_wick_format(df)
+            dp.apply_zscore(wicks, params, 'wick', ['high_wick', 'low_wick', 'trend'])
+
+            drop_cols = {'date', 'open', 'high', 'low', 'close', 'volume'}
+            non_ohlc_cols = [c for c in df.columns if c not in drop_cols]
+            df = pd.concat([wicks, df[non_ohlc_cols].reset_index(drop=True)], axis=1)
+
+            dp.apply_zscore(df, params, 'volume', ['volume'])
 
         if self.atr:
             dp.apply_zscore(df, params, 'atr', ['atr'])

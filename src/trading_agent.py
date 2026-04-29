@@ -1,9 +1,10 @@
 import os
+
 from action_space import ACTION_SPACE
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 import argparse
-import itertools
 import random
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
@@ -49,9 +50,56 @@ class TradingAgent:
         self.loss_fn = nn.MSELoss()
         self.optimizer = None
 
+        self.val_params = hyperparameters['validation']
+        print(self.val_params)
+
+        self.deterministic = self.val_params['deterministic']
+        self.val_epsilon = self.val_params['epsilon']
+        self.val_episodes = self.val_params['val_episodes']
+        self.val_frequency_episode = self.val_params['val_frequency_episode']
+
         self.LOG_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.log')
         self.MODEL_FILE = os.path.join(RESULTS_DIR, f'{self.env_id}.pt')
         self.GRAPH_FILE = os.path.join(RESULTS_DIR, f'{self.hyperparameter_set}.png')
+
+    def _run_validation(self, policy_dqn: DQN, val_env: TradingEnvironment) -> tuple[float, float, float]:
+
+        policy_dqn.eval()
+
+        episode_rewards = []
+        episode_sharpes = []
+        episode_winrates = []
+
+        for _ in range(self.val_episodes):
+            state, _ = val_env.reset()
+            state = torch.tensor(state, dtype=torch.float, device=DEVICE)
+            terminated = False
+            episode_reward = 0.0
+
+            while not terminated:
+                if random.random() < self.val_epsilon:
+                    action = random.randrange(len(ACTION_SPACE))
+                    action = torch.tensor(action, dtype=torch.int64, device=DEVICE)
+                else:
+                    with torch.no_grad():
+                        action = policy_dqn(state.unsqueeze(0)).squeeze().argmax()
+
+                new_state, reward, terminated, _, _ = val_env.step(action.item())
+                episode_reward += reward
+                state = torch.tensor(new_state, dtype=torch.float, device=DEVICE)
+
+            stats = val_env._calc_episode_stats()
+            episode_rewards.append(episode_reward)
+            episode_sharpes.append(stats['sharpe_ratio'])
+            episode_winrates.append(stats['win_rate'])
+
+        policy_dqn.train()  # restore training mode
+
+        return (
+            float(np.mean(episode_rewards)),
+            float(np.mean(episode_sharpes)),
+            float(np.mean(episode_winrates)),
+        )
 
     def run(self, is_training=True):
         log_message = ""
@@ -107,6 +155,8 @@ class TradingAgent:
             terminated = False
             episode_reward = 0.0
 
+            is_val_episode = (episode % self.val_frequency_episode == 0)
+
             while not terminated:
 
                 if is_training and random.random() < epsilon:
@@ -126,6 +176,7 @@ class TradingAgent:
                 if is_training:
                     memory.append((state, action, new_state, reward, terminated))
                     step_count += 1
+
                     # Decay epsilon after each step if memory is large enough.
                     if len(memory) > self.min_buffer_fill:
                         epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)

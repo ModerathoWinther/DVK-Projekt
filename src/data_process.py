@@ -59,9 +59,9 @@ def validate_ohlcv(df: pd.DataFrame, split: str) -> None:
 def to_wick_format(df: pd.DataFrame) -> pd.DataFrame:
     wick = pd.DataFrame({
         "date": df["date"],
-        "high_wick": df['high'] - df['open'],
-        "low_wick": df['open'] - df['low'],
-        "trend": df['close'] - df['open'],
+        "high_wick": df['high'] / df['open'],
+        "low_wick": df['open'] / df['low'],
+        "trend": df['close'] / df['open'],
         "volume": df['volume'],
     }, index=df.index)
     return wick

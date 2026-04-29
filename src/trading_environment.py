@@ -47,7 +47,6 @@ class TradingEnvironment(gym.Env):
         self.col_close = 3
         self.col_vol = 4
 
-
         if self.data_format == 'ohlcv':
             self.col_atr = 6
             self.col_macd = 7

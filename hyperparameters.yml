@@ -32,11 +32,59 @@ midas-train1:
     test_minute_length: 3
     trading_volume: 1
   env_id: 'midas-train1'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 256
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+midas-train2:
+  env_make_params:
+    split: "train"
+    num_trades: 3
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "ohlcv"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  mt5_details:
+    login: username
+    password: password
+    server: server.se
+    num_trades: 3
+    atr: true
+    macd: true
+    rsi: true
+    data_format: "ohlcv"
+    episode_length: 5000
+  live_test:
+    time_start: "2026-04-28 01:52:00"
+    time_frame_minute_size: 1
+    test_minute_length: 3
+    trading_volume: 1
+  env_id: 'midas-train2'
   learning_rate_a: 0.0002
   epsilon_init: 1.0
   epsilon_decay: 0.99999
   epsilon_min: 0.05
-  discount_factor_g: 0.999
+  discount_factor_g: 0.99
   fc1_nodes: 128
   replay_memory_size: 500000
   network_sync_rate: 5000

@@ -158,6 +158,7 @@ class TradingEnvironment(gym.Env):
             self._process_action(action)
 
         self._update_trades_obs(close)
+        reward /= self.equity_curve[-1]
         self.equity_curve.append(self.current_equity)
         return self._get_observation(), reward, is_last_step, False, {}
 

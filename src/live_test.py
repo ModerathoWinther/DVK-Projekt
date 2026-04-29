@@ -1,12 +1,10 @@
 import argparse
 import os
 from time import sleep
-
-import numpy as np
+from util import load_z_score_params
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
-import json
 import datetime
 import MetaTrader5 as mt5
 import pandas as pd
@@ -52,7 +50,7 @@ class LiveTest:
         self.price_mean = 0
         self.price_std = 0
 
-        self.z_scores = self._load_z_score_params()
+        self.z_scores = load_z_score_params(self.data_format, self.atr, self.macd)
 
         self.MODEL_FILE = os.path.join(RESULTS_DIR, f'{self.env_id}.pt')
         self.LOG_FILE = os.path.join(RESULTS_DIR, f'{self.env_id}.log')
@@ -131,29 +129,6 @@ class LiveTest:
             df['rsi'] = df['rsi'] / 100.0
 
         return df
-
-    def _load_z_score_params(self):
-
-        path = os.path.join(f'{dp.NORMALIZED_DIR}/zscores.json')
-        with open(path, 'r') as file:
-            all_params = json.load(file)
-
-        active_params = {}
-
-        if self.data_format == 'ohlcv':
-            active_params['ohlc'] = [all_params['ohlc'][0], all_params['ohlc'][1]]
-        elif self.data_format == 'wick':
-            active_params['wick'] = [all_params['wick'][0], all_params['wick'][1]]
-
-        active_params['volume'] = [all_params['volume'][0], all_params['volume'][1]]
-
-        if self.atr: active_params['atr'] = all_params['atr']
-        if self.macd:
-            active_params['macd'] = [all_params['macd'][0], all_params['macd'][1]]
-            active_params['macd_signal'] = [all_params['macd_signal'][0], all_params['macd_signal'][1]]
-            active_params['macd_histogram'] = [all_params['macd_histogram'][0], all_params['macd_histogram'][1]]
-
-        return active_params
 
     def send_order(self, action):
         if action.direction == Direction.HOLD:

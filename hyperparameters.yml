@@ -10,6 +10,12 @@ midas-train1:
     data_format: "ohlcv"
     episode_length: 5000
     is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
   mt5_details:
     login: username
     password: password

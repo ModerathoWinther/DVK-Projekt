@@ -32,11 +32,9 @@ class LiveTest:
         port = self.live_test_params['port']
         self.is_containerized = self.live_test_params['is_containerized']
 
-        if self.is_containerized:
-            self.mt5 = MetaTrader5(host='localhost', port=port)
 
-        else:
-            self.mt5 = mt5_local
+        if self.is_containerized: self.mt5 = MetaTrader5(host='localhost', port=port)
+        else: self.mt5 = mt5_local
 
         self.mt5.initialize()
         print(self.mt5.account_info())
@@ -81,9 +79,8 @@ class LiveTest:
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
-        self.input_data = self._get_input_data()
+        self._get_input_data()
         self.send_order(ACTION_SPACE[2])
-
 
     def _get_num_states(self):
         n_states = 0
@@ -100,7 +97,7 @@ class LiveTest:
         df = self._compute_indicators(df)
         df = self._normalize_input(df)
         price_feature_cols = [col for col in df.columns if col != 'date']
-        return df[price_feature_cols].values
+        self.input_data = df[price_feature_cols].values
 
     def get_market_data(self) -> pd.DataFrame:
         rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
@@ -156,6 +153,29 @@ class LiveTest:
             self.trades_state.flatten()
         ]).astype(np.float32)
         return torch.tensor(observation, dtype=torch.float32, device=DEVICE)
+
+    def _sync_trades_state(self) -> None:
+        open_positions = self.mt5.positions_get(symbol="XAUUSD") or []
+        open_count = len(open_positions)
+        our_count = int(np.sum(self.trades_state[:, 0] != 0))
+
+        if open_count < our_count:
+            to_clear = our_count - open_count
+            cleared = 0
+            for i in range(self.num_trades - 1, -1, -1):
+                if self.trades_state[i, 0] != 0 and cleared < to_clear:
+                    self.trades_state[i] = [0, 0, 0, 0]
+                    self.open_slots += 1
+                    cleared += 1
+
+    def _process_action(self, action, price: float) -> None:
+        sl = price - action.direction.value * (price * action.sl)
+        tp = price + action.direction.value * (price * action.tp)
+        for i in range(self.num_trades):
+            if self.trades_state[i, 0] == 0:
+                self.trades_state[i] = [action.direction.value, price, sl, tp]
+                self.open_slots -= 1
+                break
 
     def send_order(self, action):
         if action.direction == Direction.HOLD:
@@ -219,10 +239,21 @@ class LiveTest:
         print(self.next_time_frame)
 
         while True:
-            if datetime.datetime.now() > self.next_time_frame:
-                # use get_market_data to fetch last candlestick
+            now = datetime.datetime.now()
 
-                # todo Translate in-data to format used in training (normalize, etc)
+            if now > self.next_time_frame:
+
+                self._get_input_data()
+
+                self._sync_trades_state()
+
+                state = self._build_observation()
+
+                with torch.no_grad():
+                    action_idx = self.dqn(state.unsqueeze(dim=0)).squeeze().argmax()
+                action = ACTION_SPACE[action_idx]
+
+                print(f"[{now}] Action: {action.direction.name}, sl={action.sl}  tp={action.tp}, open_slots={self.open_slots}")
 
                 # todo Let model decide action to take
                 action = ACTION_SPACE[2]

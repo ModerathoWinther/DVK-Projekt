@@ -26,6 +26,7 @@ RESULTS_DIR = 'results'
 WARMUP_BARS = dp.WARMUP_ROWS + 1
 
 MT5_TIMEZONE = pytz.timezone("Europe/Helsinki")
+BARS_PER_DAY_M1 = 92 * 15
 
 class LiveTest:
 
@@ -48,7 +49,7 @@ class LiveTest:
         print(self.mt5.account_info())
         print(self.mt5.version())
 
-
+        self.num_tests = self.live_test_params.get('num_tests')
         self.time_start = datetime.datetime.strptime(
             self.live_test_params.get('time_start'),
             "%Y-%m-%d %H:%M:%S")
@@ -221,7 +222,7 @@ class LiveTest:
     def run(self):
         os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
 
-        for i in range(45):
+        for i in range(self.num_tests):
             print(f'build_observation: {self._build_observation()}')
             if self.time_start < datetime.datetime.now():
                 raise ValueError("TIME START IS IN THE PAST")
@@ -243,7 +244,8 @@ class LiveTest:
                     action = ACTION_SPACE[2]
                     if self.mt5.positions_total() < self.num_trades:
                         self.send_order(action)
-
+                    else:
+                        print(f"[{datetime.datetime.now()}] NO ORDER, TOO MANY TRADES OPEN")
                     self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
                     self.equity_curve.append(self.mt5.account_info().balance)
                 else:
@@ -292,7 +294,7 @@ class LiveTest:
             self.next_time_frame = self.time_start
             self.time_end = self.time_start + datetime.timedelta(minutes=self.test_minute_length)
 
-        print(util.calculate_sharpe_ratio(self.equity_curve))
+        print(util.calculate_sharpe_ratio(self.equity_curve, BARS_PER_DAY_M1))
         return 1
 
     def calc_stats(self, equity_curve, deals):

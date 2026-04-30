@@ -10,6 +10,8 @@ import init_state
 import util
 from action_space import Direction, ACTION_SPACE, HOLD_ACTION, UNIT_TEST_ACTION_SPACE
 
+BARS_PER_DAY = 92
+
 class TradingEnvironment(gym.Env):
 
     def __init__(self, params):
@@ -257,7 +259,7 @@ class TradingEnvironment(gym.Env):
         drawdowns = (self.equity_curve - peak) / peak
         max_drawdown = np.min(drawdowns)
 
-        sharpe_ratio = util.calculate_sharpe_ratio(self.equity_curve)
+        sharpe_ratio = util.calculate_sharpe_ratio(self.equity_curve, bars_per_day)
 
         stats = {
             "closed_trades": len(self.closed_trades),

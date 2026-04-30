@@ -51,8 +51,9 @@ class LiveTest:
             "%Y-%m-%d %H:%M:%S")
         self.next_time_frame = self.time_start
         self.time_frame_minute_size = self.live_test_params.get('time_frame_minute_size')
+        self.test_minute_length = self.live_test_params.get('test_minute_length')
         self.time_end = (self.time_start +
-                         datetime.timedelta(minutes=self.live_test_params.get('test_minute_length')))
+                         datetime.timedelta(minutes=self.test_minute_length))
         self.trading_vol = self.live_test_params.get('trading_volume')
 
         self.env_id = params.get('env_id')
@@ -85,6 +86,8 @@ class LiveTest:
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
         self.input_data = self._get_input_data()
+
+        self.equity_curve = []
 
 
     def _get_num_states(self):
@@ -218,7 +221,6 @@ class LiveTest:
         print(f"\nPROGRAM START: {datetime.datetime.now()}")
         print(f"TRADE START: {self.time_start}")
         print(f"TRADE END: {self.time_end}\n")
-        print(self.next_time_frame)
 
         while True:
             if datetime.datetime.now() > self.next_time_frame:
@@ -235,8 +237,7 @@ class LiveTest:
                     self.send_order(action)
 
                 self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
-                #print(self.next_time_frame)
-                #print(self.time_end)
+                self.equity_curve.append(self.mt5.account_info().balance)
             else:
                 sleep(0.01)
 
@@ -247,6 +248,12 @@ class LiveTest:
         # Let terminal save deals
         sleep(1)
 
+        self.equity_curve.append(self.mt5.account_info().balance)
+        current_equity_curve = self.equity_curve[-(self.test_minute_length + 1):]
+        print(self.equity_curve)
+        print(current_equity_curve)
+
+        # Translate to mt5 timezones to get correct window
         eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
         eest_start = self.time_start.astimezone(MT5_TIMEZONE)
         eest_start = eest_start.replace(tzinfo=None)

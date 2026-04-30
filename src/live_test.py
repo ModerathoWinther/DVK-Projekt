@@ -99,7 +99,7 @@ class LiveTest:
         df = self._compute_indicators(df)
         df = self._normalize_input(df)
         price_feature_cols = [col for col in df.columns if col != 'date']
-        return df[price_feature_cols]
+        return df[price_feature_cols].values
 
     def get_market_data(self) -> pd.DataFrame:
         if self.is_containerized: mt5 = self.mt5
@@ -215,7 +215,7 @@ class LiveTest:
     def run(self):
         if self.is_containerized: mt5 = self.mt5
         else: mt5 = mt5_local
-        print(self._build_observation())
+        print(f'build_observation: {self._build_observation()}')
         if self.time_start < datetime.datetime.now():
             raise ValueError("TIME START IS IN THE PAST")
 

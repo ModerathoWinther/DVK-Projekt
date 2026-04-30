@@ -37,12 +37,13 @@ class LiveTest:
 
         if self.is_containerized:
             self.mt5 = MetaTrader5(host='localhost', port=port)
-            self.mt5.initialize()
-            print(self.mt5.account_info())
-            print(self.mt5.version())
-        else:
-            mt5_local.initialize()
 
+        else:
+            self.mt5 = mt5_local
+
+        self.mt5.initialize()
+        print(self.mt5.account_info())
+        print(self.mt5.version())
 
 
         self.time_start = datetime.datetime.strptime(
@@ -92,7 +93,6 @@ class LiveTest:
         if self.macd: n_states += 3
         if self.rsi: n_states += 1
         n_states += 5 if self.data_format == 'ohlcv' else 4
-        print(f'n_states. {n_states}')
         n_states += (self.num_trades * 3)
         print(f'n_states. {n_states}')
         return n_states
@@ -102,11 +102,10 @@ class LiveTest:
         df = self._compute_indicators(df)
         df = self._normalize_input(df)
         price_feature_cols = [col for col in df.columns if col != 'date']
-        return df[price_feature_cols]
+        return df[price_feature_cols].values
 
     def get_market_data(self) -> pd.DataFrame:
-        if self.is_containerized: rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
-        else: rates = mt5_local.copy_rates_from_pos("XAUUSD", mt5_local.TIMEFRAME_M1, 0, WARMUP_BARS)
+        rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
@@ -164,23 +163,22 @@ class LiveTest:
         if action.direction == Direction.HOLD:
             print(f"[{datetime.datetime.now()}] HOLD POSITION:")
             return 1
-        if self.is_containerized: mt5 = self.mt5
-        else: mt5 = mt5_local
+
         sl = tp = 0
         order_type = None
         if action.direction == Direction.BUY:
-            price = mt5.symbol_info_tick("XAUUSD").ask
-            order_type = mt5.ORDER_TYPE_BUY
+            price = self.mt5.symbol_info_tick("XAUUSD").ask
+            order_type = self.mt5.ORDER_TYPE_BUY
             sl = price - (price * action.sl)
             tp = price + (price * action.tp)
         elif action.direction == Direction.SELL:
-            price = mt5.symbol_info_tick("XAUUSD").bid
+            price = self.mt5.symbol_info_tick("XAUUSD").bid
             order_type = self.mt5.ORDER_TYPE_SELL
             sl = price + (price * action.sl)
             tp = price - (price * action.tp)
 
         request = {
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": self.mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
             "volume": self.trading_vol,
             "type": order_type,
@@ -188,12 +186,12 @@ class LiveTest:
             "tp": tp,
         }
 
-        result = mt5.order_send(request)
+        result = self.mt5.order_send(request)
 
         if result is None:
-            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {mt5.last_error()}")
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
             return -1
-        elif result.retcode != mt5.TRADE_RETCODE_DONE:
+        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
             print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
             return -1
         else:
@@ -213,6 +211,7 @@ class LiveTest:
             self.mt5.order_send(request)
 
     def run(self):
+        print(f'build_observation: {self._build_observation()}')
         if self.time_start < datetime.datetime.now():
             raise ValueError("TIME START IS IN THE PAST")
 
@@ -221,7 +220,6 @@ class LiveTest:
         print(f"TRADE END: {self.time_end}\n")
         print(self.next_time_frame)
 
-        print(self._build_observation())
         while True:
             if datetime.datetime.now() > self.next_time_frame:
                 if self.next_time_frame >= self.time_end:

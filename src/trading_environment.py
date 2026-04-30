@@ -43,7 +43,6 @@ class TradingEnvironment(gym.Env):
         self.current_step = 0
         self.episode_end = self.episode_length
 
-        self.col_real_atr = 4
         self.base_cols = []
         self.col_open = 0
         self.col_high = 1
@@ -153,6 +152,7 @@ class TradingEnvironment(gym.Env):
         if act.direction != Direction.HOLD and self.open_slots > 0:
             open = self.prices[self.current_step][self.col_open]
             entry_price = open
+
             sl = entry_price - act.direction.value * (entry_price * act.sl)
             tp = entry_price + act.direction.value * (entry_price * act.tp)
             for i in range(self.num_trades):

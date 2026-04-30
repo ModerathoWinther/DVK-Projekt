@@ -137,7 +137,6 @@ class TradingEnvironment(gym.Env):
         prev_equity = self.current_equity
 
         realized_pnl, _ = self._process_trades(open, high, low)
-        reward = realized_pnl
 
         self.current_step += 1
         self.current_equity += realized_pnl

@@ -37,7 +37,6 @@ class LiveTest:
             self.mt5.initialize()
             print(self.mt5.account_info())
             print(self.mt5.version())
-            self.mt5.initialize()
         else:
             mt5_local.initialize()
 
@@ -74,6 +73,9 @@ class LiveTest:
         self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
         self.open_slots = self.num_trades
 
+        print(self.num_actions)
+        print(self.num_states)
+
         self.dqn = DQN(self.num_states, self.num_actions, self.fc1_nodes, self.enable_dueling_dqn).to(DEVICE)
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
@@ -88,7 +90,9 @@ class LiveTest:
         if self.macd: n_states += 3
         if self.rsi: n_states += 1
         n_states += 5 if self.data_format == 'ohlcv' else 4
-        n_states += self.num_trades * 4
+        print(f'n_states. {n_states}')
+        n_states += (self.num_trades * 3)
+        print(f'n_states. {n_states}')
         return n_states
 
     def _get_input_data(self):
@@ -99,7 +103,8 @@ class LiveTest:
         return df[price_feature_cols]
 
     def get_market_data(self) -> pd.DataFrame:
-        rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
+        if self.is_containerized: rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
+        else: rates = mt5_local.copy_rates_from_pos("XAUUSD", mt5_local.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
@@ -157,22 +162,23 @@ class LiveTest:
         if action.direction == Direction.HOLD:
             print(f"[{datetime.datetime.now()}] HOLD POSITION:")
             return 1
-
+        if self.is_containerized: mt5 = self.mt5
+        else: mt5 = mt5_local
         sl = tp = 0
         order_type = None
         if action.direction == Direction.BUY:
-            price = self.mt5.symbol_info_tick("XAUUSD").ask
-            order_type = self.mt5.ORDER_TYPE_BUY
+            price = mt5.symbol_info_tick("XAUUSD").ask
+            order_type = mt5.ORDER_TYPE_BUY
             sl = price - (price * action.sl)
             tp = price + (price * action.tp)
         elif action.direction == Direction.SELL:
-            price = self.mt5.symbol_info_tick("XAUUSD").bid
+            price = mt5.symbol_info_tick("XAUUSD").bid
             order_type = self.mt5.ORDER_TYPE_SELL
             sl = price + (price * action.sl)
             tp = price - (price * action.tp)
 
         request = {
-            "action": self.mt5.TRADE_ACTION_DEAL,
+            "action": mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
             "volume": self.trading_vol,
             "type": order_type,
@@ -180,12 +186,12 @@ class LiveTest:
             "tp": tp,
         }
 
-        result = self.mt5.order_send(request)
+        result = mt5.order_send(request)
 
         if result is None:
-            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {mt5.last_error()}")
             return -1
-        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
+        elif result.retcode != mt5.TRADE_RETCODE_DONE:
             print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
             return -1
         else:

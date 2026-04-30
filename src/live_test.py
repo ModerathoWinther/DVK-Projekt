@@ -1,4 +1,7 @@
 import os
+
+import util
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 
@@ -88,6 +91,8 @@ class LiveTest:
         self.input_data = self._get_input_data()
 
         self.equity_curve = []
+
+        self.env_id = params.get('env_id')
 
 
     def _get_num_states(self):
@@ -214,59 +219,105 @@ class LiveTest:
             self.mt5.order_send(request)
 
     def run(self):
-        print(f'build_observation: {self._build_observation()}')
-        if self.time_start < datetime.datetime.now():
-            raise ValueError("TIME START IS IN THE PAST")
+        os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
 
-        print(f"\nPROGRAM START: {datetime.datetime.now()}")
-        print(f"TRADE START: {self.time_start}")
-        print(f"TRADE END: {self.time_end}\n")
+        for i in range(45):
+            print(f'build_observation: {self._build_observation()}')
+            if self.time_start < datetime.datetime.now():
+                raise ValueError("TIME START IS IN THE PAST")
 
-        while True:
-            if datetime.datetime.now() > self.next_time_frame:
-                if self.next_time_frame >= self.time_end:
-                    break
+            print(f"\nPROGRAM START: {datetime.datetime.now()}")
+            print(f"TRADE START: {self.time_start}")
+            print(f"TRADE END: {self.time_end}\n")
 
-                # use get_market_data to fetch last candlestick
+            while True:
+                if datetime.datetime.now() > self.next_time_frame:
+                    if self.next_time_frame >= self.time_end:
+                        break
 
-                # todo Translate in-data to format used in training (normalize, etc)
+                    # use get_market_data to fetch last candlestick
 
-                # todo Let model decide action to take
-                action = ACTION_SPACE[2]
-                if self.mt5.positions_total() < self.num_trades:
-                    self.send_order(action)
+                    # todo Translate in-data to format used in training (normalize, etc)
 
-                self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
-                self.equity_curve.append(self.mt5.account_info().balance)
+                    # todo Let model decide action to take
+                    action = ACTION_SPACE[2]
+                    if self.mt5.positions_total() < self.num_trades:
+                        self.send_order(action)
+
+                    self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
+                    self.equity_curve.append(self.mt5.account_info().balance)
+                else:
+                    sleep(0.01)
+
+
+            self.close_all_positions()
+            print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
+
+            # Let terminal save deals
+            sleep(1)
+
+            self.equity_curve.append(self.mt5.account_info().balance)
+            current_equity_curve = self.equity_curve[-(self.test_minute_length + 1):]
+            print(self.equity_curve)
+            print(current_equity_curve)
+
+            # Translate to mt5 timezones to get correct window
+            eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
+            eest_start = self.time_start.astimezone(MT5_TIMEZONE)
+            eest_start = eest_start.replace(tzinfo=None)
+            deals = self.mt5.history_deals_get(eest_start, eest_now, group="XAUUSD")
+
+            try:
+                original_df = pd.read_csv(f'results/live_test/{self.env_id}/{self.env_id}.csv')
+            except FileNotFoundError:
+                original_df = pd.DataFrame(
+                    columns=['id', 'win_rate', 'loss_rate', 'profit_factor', 'expectancy', 'max_drawdown'])
+
+            if len(deals) > 0:
+                df = pd.DataFrame([d._asdict() for d in deals])
+                df = df[df['entry'] == 1]
+
+                stats = self.calc_stats(current_equity_curve, df)
+                stats['id'] = self.env_id
             else:
-                sleep(0.01)
+                stats = {'id': self.env_id, 'win_rate': None, 'loss_rate': None, 'profit_factor': None,
+                         'expectancy': None, 'max_drawdown': None}
 
+            print(stats)
+            new_df = pd.concat([original_df, pd.DataFrame([stats])], ignore_index=True)
+            new_df.to_csv(f'results/live_test/{self.env_id}/{self.env_id}.csv', index=False)
 
-        self.close_all_positions()
-        print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
+            self.time_start = datetime.datetime.now() + datetime.timedelta(minutes=1)
+            self.time_start = self.time_start.replace(second=0, microsecond=0)
+            self.next_time_frame = self.time_start
+            self.time_end = self.time_start + datetime.timedelta(minutes=self.test_minute_length)
 
-        # Let terminal save deals
-        sleep(1)
-
-        self.equity_curve.append(self.mt5.account_info().balance)
-        current_equity_curve = self.equity_curve[-(self.test_minute_length + 1):]
-        print(self.equity_curve)
-        print(current_equity_curve)
-
-        # Translate to mt5 timezones to get correct window
-        eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
-        eest_start = self.time_start.astimezone(MT5_TIMEZONE)
-        eest_start = eest_start.replace(tzinfo=None)
-        deals = self.mt5.history_deals_get(eest_start, eest_now, group="XAUUSD")
-
-        if len(deals) > 0:
-            df = pd.DataFrame([d._asdict() for d in deals])
-            df = df[df['entry'] == 1]
-            df['time'] = pd.to_datetime(df['time'], unit='s')
-            print(df)
-
+        print(util.calculate_sharpe_ratio(self.equity_curve))
         return 1
 
+    def calc_stats(self, equity_curve, deals):
+
+        profits = deals['profit'].values
+
+        wins = profits[profits > 0]
+        losses = profits[profits < 0]
+
+        win_rate = len(wins) / len(profits)
+        loss_rate = len(losses) / len(profits)
+        profit_factor = wins.sum() / abs(losses.sum())
+        expectancy = profits.mean()
+
+        peak = np.maximum.accumulate(equity_curve)
+        drawdowns = (equity_curve - peak) / peak
+        max_drawdown = np.min(drawdowns)
+
+        return {
+            "win_rate": win_rate,
+            "loss_rate": loss_rate,
+            "profit_factor": profit_factor,
+            "expectancy": expectancy,
+            "max_drawdown": max_drawdown,
+        }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MT5 login details.')

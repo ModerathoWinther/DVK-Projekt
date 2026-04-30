@@ -48,9 +48,9 @@ class TradingEnvironment(gym.Env):
         self.col_vol = 4
 
         if self.data_format == 'ohlcv':
-            self.col_atr = 6
-            self.col_macd = 7
-            self.col_rsi = 9
+            self.col_atr = 5
+            self.col_macd = 6
+            self.col_rsi = 8
             base_cols = list(range(5))
         else:
             self.col_atr = 4

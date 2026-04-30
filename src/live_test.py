@@ -8,6 +8,7 @@ from time import sleep
 import numpy as np
 import datetime
 from mt5linux import MetaTrader5
+import MetaTrader5 as mt5_local
 import pandas as pd
 import torch
 import yaml
@@ -27,21 +28,29 @@ class LiveTest:
             all_hyperparameter_sets = yaml.safe_load(file)
             params = all_hyperparameter_sets[params]
 
-        live_test_params = params.get('live_test')
-        port = live_test_params['port']
-        self.mt5 = MetaTrader5(host='localhost', port=port)
-        self.mt5.initialize()
-        print(self.mt5.account_info())
-        print(self.mt5.version())
+        self.live_test_params = params.get('live_test')
+        port = self.live_test_params['port']
+        self.is_containerized = self.live_test_params['is_containerized']
+
+        if self.is_containerized:
+            self.mt5 = MetaTrader5(host='localhost', port=port)
+            self.mt5.initialize()
+            print(self.mt5.account_info())
+            print(self.mt5.version())
+            self.mt5.initialize()
+        else:
+            mt5_local.initialize()
+
+
 
         self.time_start = datetime.datetime.strptime(
-            live_test_params.get('time_start'),
+            self.live_test_params.get('time_start'),
             "%Y-%m-%d %H:%M:%S")
         self.next_time_frame = self.time_start
-        self.time_frame_minute_size = live_test_params.get('time_frame_minute_size')
+        self.time_frame_minute_size = self.live_test_params.get('time_frame_minute_size')
         self.time_end = (self.time_start +
-                         datetime.timedelta(minutes=live_test_params.get('test_minute_length')))
-        self.trading_vol = live_test_params.get('trading_volume')
+                         datetime.timedelta(minutes=self.live_test_params.get('test_minute_length')))
+        self.trading_vol = self.live_test_params.get('trading_volume')
 
         self.env_id = params.get('env_id')
         self.env_params = params.get('env_make_params')
@@ -144,7 +153,6 @@ class LiveTest:
         ]).astype(np.float32)
         return torch.tensor(observation, dtype=torch.float32, device=DEVICE)
 
-
     def send_order(self, action):
         if action.direction == Direction.HOLD:
             print(f"[{datetime.datetime.now()}] HOLD POSITION:")
@@ -203,8 +211,9 @@ class LiveTest:
         print(f"\nPROGRAM START: {datetime.datetime.now()}")
         print(f"TRADE START: {self.time_start}")
         print(f"TRADE END: {self.time_end}\n")
-
         print(self.next_time_frame)
+
+        print(self._build_observation())
         while True:
             if datetime.datetime.now() > self.next_time_frame:
                 # use get_market_data to fetch last candlestick

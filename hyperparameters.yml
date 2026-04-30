@@ -32,6 +32,7 @@ midas-train1:
     test_minute_length: 3
     trading_volume: 0.1
     port: 8001
+    is_containerized: False
   env_id: 'midas-train1'
   learning_rate_a: 0.0001
   epsilon_init: 1.0

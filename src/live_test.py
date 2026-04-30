@@ -34,12 +34,13 @@ class LiveTest:
 
         if self.is_containerized:
             self.mt5 = MetaTrader5(host='localhost', port=port)
-            self.mt5.initialize()
-            print(self.mt5.account_info())
-            print(self.mt5.version())
-        else:
-            mt5_local.initialize()
 
+        else:
+            self.mt5 = mt5_local
+
+        self.mt5.initialize()
+        print(self.mt5.account_info())
+        print(self.mt5.version())
 
 
         self.time_start = datetime.datetime.strptime(
@@ -102,9 +103,7 @@ class LiveTest:
         return df[price_feature_cols].values
 
     def get_market_data(self) -> pd.DataFrame:
-        if self.is_containerized: mt5 = self.mt5
-        else: mt5 = mt5_local
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
+        rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
@@ -162,23 +161,22 @@ class LiveTest:
         if action.direction == Direction.HOLD:
             print(f"[{datetime.datetime.now()}] HOLD POSITION:")
             return 1
-        if self.is_containerized: mt5 = self.mt5
-        else: mt5 = mt5_local
+
         sl = tp = 0
         order_type = None
         if action.direction == Direction.BUY:
-            price = mt5.symbol_info_tick("XAUUSD").ask
-            order_type = mt5.ORDER_TYPE_BUY
+            price = self.mt5.symbol_info_tick("XAUUSD").ask
+            order_type = self.mt5.ORDER_TYPE_BUY
             sl = price - (price * action.sl)
             tp = price + (price * action.tp)
         elif action.direction == Direction.SELL:
-            price = mt5.symbol_info_tick("XAUUSD").bid
-            order_type = mt5.ORDER_TYPE_SELL
+            price = self.mt5.symbol_info_tick("XAUUSD").bid
+            order_type = self.mt5.ORDER_TYPE_SELL
             sl = price + (price * action.sl)
             tp = price - (price * action.tp)
 
         request = {
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": self.mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
             "volume": self.trading_vol,
             "type": order_type,
@@ -186,12 +184,12 @@ class LiveTest:
             "tp": tp,
         }
 
-        result = mt5.order_send(request)
+        result = self.mt5.order_send(request)
 
         if result is None:
-            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {mt5.last_error()}")
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
             return -1
-        elif result.retcode != mt5.TRADE_RETCODE_DONE:
+        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
             print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
             return -1
         else:
@@ -199,22 +197,18 @@ class LiveTest:
             return 1
 
     def close_all_positions(self):
-        if self.is_containerized: mt5 = self.mt5
-        else: mt5 = mt5_local
-        for pos in mt5.positions_get():
+        for pos in self.mt5.positions_get():
             request = {
-                "action": mt5.TRADE_ACTION_DEAL,
+                "action": self.mt5.TRADE_ACTION_DEAL,
                 "position": pos.ticket,
                 "symbol": pos.symbol,
                 "volume": pos.volume,
-                "type": mt5.ORDER_TYPE_BUY if pos.type == 1 else mt5.ORDER_TYPE_SELL,
-                "type_time": mt5.ORDER_TIME_GTC
+                "type": self.mt5.ORDER_TYPE_BUY if pos.type == 1 else self.mt5.ORDER_TYPE_SELL,
+                "type_time": self.mt5.ORDER_TIME_GTC
             }
-            mt5.order_send(request)
+            self.mt5.order_send(request)
 
     def run(self):
-        if self.is_containerized: mt5 = self.mt5
-        else: mt5 = mt5_local
         print(f'build_observation: {self._build_observation()}')
         if self.time_start < datetime.datetime.now():
             raise ValueError("TIME START IS IN THE PAST")
@@ -232,7 +226,7 @@ class LiveTest:
 
                 # todo Let model decide action to take
                 action = ACTION_SPACE[2]
-                if mt5.positions_total() < self.num_trades:
+                if self.mt5.positions_total() < self.num_trades:
                     self.send_order(action)
 
                 if self.next_time_frame >= self.time_end:

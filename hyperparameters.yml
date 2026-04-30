@@ -1,7 +1,7 @@
 midas-train1:
   env_make_params:
     split: "train"
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: true
@@ -20,7 +20,7 @@ midas-train1:
     login: username
     password: password
     server: server.se
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: true
@@ -50,7 +50,7 @@ midas-train1:
 midas-train2:
   env_make_params:
     split: "train"
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: true
@@ -69,7 +69,7 @@ midas-train2:
     login: username
     password: password
     server: server.se
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: true
@@ -84,36 +84,42 @@ midas-train2:
   env_id: 'midas-train2'
   learning_rate_a: 0.0002
   epsilon_init: 1.0
-  epsilon_decay: 0.99999
+  epsilon_decay: 0.999995
   epsilon_min: 0.05
-  discount_factor_g: 0.99
-  fc1_nodes: 128
-  replay_memory_size: 500000
-  network_sync_rate: 5000
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
   enable_double_dqn: true
   enable_dueling_dqn: true
   min_buffer_fill: 10000
-  mini_batch_size: 128
-  max_episodes: 500
+  mini_batch_size: 256
+  max_episodes: 750
 
 # WICK
-midas-wick-train:
+midas-wick-train1:
   env_make_params:
     split: "train"
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: true
-    initial_capital: 100
+    initial_capital: 10000
     transaction_cost: 0.
     data_format: "wick"
     episode_length: 5000
     is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
   mt5_details:
     login: username
     password: password
     server: server.se
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: true
@@ -123,8 +129,8 @@ midas-wick-train:
     time_start: "2026-04-28 05:00:00"
     time_frame_minute_size: 1
     test_minute_length: 3
-    trading_volume: 1   
-  env_id: 'midas-train1'
+    trading_volume: 1
+  env_id: 'midas-wick-train1'
   learning_rate_a: 0.000
   epsilon_init: 1.0     
   epsilon_decay: 0.99999
@@ -136,8 +142,56 @@ midas-wick-train:
   enable_double_dqn: tru
   enable_dueling_dqn: tr
   min_buffer_fill: 10000
-  mini_batch_size: 128  
-  max_episodes: 500
+  mini_batch_size: 128
+  max_episodes: 750
+
+midas-wick-train2:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000
+    transaction_cost: 0.
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  mt5_details:
+    login: username
+    password: password
+    server: server.se
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    data_format: "wick"
+    episode_length: 5000
+  live_test:
+    time_start: "2026-04-28 01:52:00"
+    time_frame_minute_size: 1
+    test_minute_length: 3
+    trading_volume: 1
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  env_id: 'midas-wick-train2'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999999
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 750
 
 midas-wick-train2:
   env_make_params:
@@ -191,7 +245,7 @@ midas-wick-train2:
 #midas-test1:
 #  env_make_params:
 #    split: "test"
-#    num_trades: 3
+#    num_trades: 5
 #    atr: true
 #    macd: true
 #    rsi: true
@@ -218,7 +272,7 @@ midas-wick-train2:
 midas-all-indicators:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: true
@@ -243,7 +297,7 @@ midas-all-indicators:
 midas-ohlcv-only:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: false
     macd: false
     rsi: false
@@ -270,7 +324,7 @@ midas-ohlcv-only:
 midas-atr:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: false
     rsi: false
@@ -295,7 +349,7 @@ midas-atr:
 midas-atr-rsi:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: false
     rsi: true
@@ -320,7 +374,7 @@ midas-atr-rsi:
 midas-atr-macd:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: true
     macd: true
     rsi: false
@@ -347,7 +401,7 @@ midas-atr-macd:
 midas-rsi:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: false
     macd: false
     rsi: true
@@ -374,7 +428,7 @@ midas-rsi:
 midas-macd:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: false
     macd: true
     rsi: false
@@ -399,7 +453,7 @@ midas-macd:
 midas-macd-rsi:
   env_make_params:
     split: "test"
-    num_trades: 3
+    num_trades: 5
     atr: false
     macd: true
     rsi: true

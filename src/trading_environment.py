@@ -39,6 +39,7 @@ class TradingEnvironment(gym.Env):
         self.current_step = 0
         self.episode_end = self.episode_length
 
+        self.col_real_atr = 4
         self.base_cols = []
         self.col_open = 0
         self.col_high = 1
@@ -47,13 +48,13 @@ class TradingEnvironment(gym.Env):
         self.col_vol = 4
 
         if self.data_format == 'ohlcv':
-            self.col_atr = 6
-            self.col_macd = 7
-            self.col_rsi = 9
-            base_cols = list(range(5))
-        else:
             self.col_atr = 5
             self.col_macd = 6
+            self.col_rsi = 8
+            base_cols = list(range(5))
+        else:
+            self.col_atr = 4
+            self.col_macd = 5
             self.col_rsi = 8
             base_cols = list(range(4))
 
@@ -197,7 +198,7 @@ class TradingEnvironment(gym.Env):
             hit_tp = (direction > 0 and high >= tp) or (direction < 0 and low  <= tp)
 
             if open_hit_sl or open_hit_tp:
-                pnl = (open - entry_price) * direction
+                pnl = open - entry_price * direction
                 realized_pnl = pnl - self.transaction_cost * abs(entry_price)
                 total_realized_pnl += realized_pnl
                 self.trades_state[i] = [0, 0, 0, 0]

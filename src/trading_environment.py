@@ -245,7 +245,7 @@ class TradingEnvironment(gym.Env):
 
 
     def _calc_episode_stats(self):
-        profits = to_numpy(self.closed_trades)
+        profits = np.array(self.closed_trades)
 
         wins = profits[profits > 0]
         losses = profits[profits < 0]
@@ -255,11 +255,12 @@ class TradingEnvironment(gym.Env):
         profit_factor = wins.sum() / abs(losses.sum())
         expectancy = profits.mean()
 
-        peak = np.maximum.accumulate(self.equity_curve)
-        drawdowns = (self.equity_curve - peak) / peak
+        equity_curve = np.array(self.equity_curve)
+        peak = np.maximum.accumulate(equity_curve)
+        drawdowns = (equity_curve - peak) / peak
         max_drawdown = np.min(drawdowns)
 
-        sharpe_ratio = util.calculate_sharpe_ratio(self.equity_curve, bars_per_day)
+        sharpe_ratio = util.calculate_sharpe_ratio(equity_curve, BARS_PER_DAY)
 
         stats = {
             "closed_trades": len(self.closed_trades),

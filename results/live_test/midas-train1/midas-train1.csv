@@ -1,0 +1,3 @@
+id,win_rate,loss_rate,profit_factor,expectancy,max_drawdown
+midas-train1,1.0,0.0,inf,13.25,0.0
+midas-train1,,,,,

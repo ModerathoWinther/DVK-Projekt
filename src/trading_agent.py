@@ -1,5 +1,7 @@
 import os
 
+import pandas as pd
+
 from action_space import ACTION_SPACE
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -267,8 +269,15 @@ class TradingAgent:
                         step_count = 0
                 print(log_message)
             elif self.split == 'test':
+                ep_stats = env.get_episode_stats
                 print("reward", episode_reward)
                 print(env.get_episode_stats())
+
+                os.makedirs(f'results/backtest/{self.env_id}', exist_ok=True)
+                df = pd.DataFrame(ep_stats)
+                df['id'] = self.env_id
+                df.to_csv(f'results/backtest/{self.env_id}/{self.env_id}.csv', index=False)
+
 
     def save_graph(self,
                    train_rewards, train_sharpes, train_winrates,

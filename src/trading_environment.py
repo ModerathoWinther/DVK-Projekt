@@ -4,8 +4,10 @@ import gymnasium as gym
 import numpy as np
 import yaml
 from gymnasium import spaces
+from sympy.physics.quantum.matrixutils import to_numpy
 
 import init_state
+import util
 from action_space import Direction, ACTION_SPACE, HOLD_ACTION, UNIT_TEST_ACTION_SPACE
 
 class TradingEnvironment(gym.Env):
@@ -107,28 +109,6 @@ class TradingEnvironment(gym.Env):
         self.open_slots = self.num_trades
         self.trades_state.fill(0.0)
         return self._get_observation(), {}
-
-    def calculate_sharpe_ratio(self) -> float:
-        if len(self.equity_curve) < 2:
-            return 0.0
-        equity = np.array(self.equity_curve)
-        if np.any(equity <= 0):
-            return -999.0
-        returns = np.diff(equity) / equity[:-1]
-        active_returns = returns[returns != 0.0]
-        if len(active_returns) < 2:
-            return 0.0
-        std_ret = np.std(active_returns, ddof=1)
-        if std_ret < 1e-8:
-            return 0.0
-        mean_ret = np.mean(active_returns)
-
-        total_bars = len(self.equity_curve)
-        n_trades = len(active_returns)
-        trades_per_year = (n_trades / total_bars) * (252 * 92)
-
-        sharpe = (mean_ret / std_ret) * np.sqrt(trades_per_year)
-        return float(sharpe)
 
     def step(self, action: int):
         current_prices = self.prices[self.current_step]
@@ -263,45 +243,21 @@ class TradingEnvironment(gym.Env):
 
 
     def _calc_episode_stats(self):
-        closed_trades = len(self.closed_trades)
-        total_profit = 0
-        total_gain = 0
-        total_loss = 0
-        num_gain = 0
-        num_loss = 0
-        win_rate = 0.0
-        loss_rate = 0.0
-        avg_gain = 0.0
-        avg_loss = 0.0
-        profit_factor = 0.0
+        profits = to_numpy(self.closed_trades)
 
-        for pnl in self.closed_trades:
-            total_profit += pnl
-            if pnl > 0:
-                num_gain += 1
-                total_gain += pnl
-            if pnl < 0:
-                num_loss += 1
-                total_loss += pnl * -1
+        wins = profits[profits > 0]
+        losses = profits[profits < 0]
 
-        if closed_trades > 0:
-            win_rate = num_gain / closed_trades
-            loss_rate = num_loss / closed_trades
-
-        if num_gain > 0:
-            avg_gain = total_gain / num_gain
-        if num_loss > 0:
-            avg_loss = total_loss / num_loss
-        expectancy = (win_rate * avg_gain) - (loss_rate * avg_loss)
-
-        if total_loss != 0:
-            profit_factor = total_gain / total_loss
+        win_rate = len(wins) / len(profits)
+        loss_rate = len(losses) / len(profits)
+        profit_factor = wins.sum() / abs(losses.sum())
+        expectancy = profits.mean()
 
         peak = np.maximum.accumulate(self.equity_curve)
         drawdowns = (self.equity_curve - peak) / peak
         max_drawdown = np.min(drawdowns)
 
-        sharpe_ratio = self.calculate_sharpe_ratio()
+        sharpe_ratio = util.calculate_sharpe_ratio(self.equity_curve)
 
         stats = {
             "closed_trades": len(self.closed_trades),

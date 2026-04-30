@@ -1,4 +1,7 @@
 import os
+
+import numpy as np
+
 import data_process as dp
 import json
 
@@ -23,4 +26,27 @@ def load_z_score_params(data_format, atr, macd):
         active_params['macd_histogram'] = [all_params['macd_histogram'][0], all_params['macd_histogram'][1]]
 
     return active_params
+
+
+def calculate_sharpe_ratio(equity_curve) -> float:
+    if len(equity_curve) < 2:
+        return 0.0
+    equity = np.array(equity_curve)
+    if np.any(equity <= 0):
+        return -999.0
+    returns = np.diff(equity) / equity[:-1]
+    active_returns = returns[returns != 0.0]
+    if len(active_returns) < 2:
+        return 0.0
+    std_ret = np.std(active_returns, ddof=1)
+    if std_ret < 1e-8:
+        return 0.0
+    mean_ret = np.mean(active_returns)
+
+    total_bars = len(equity_curve)
+    n_trades = len(active_returns)
+    trades_per_year = (n_trades / total_bars) * (252 * 92)
+
+    sharpe = (mean_ret / std_ret) * np.sqrt(trades_per_year)
+    return float(sharpe)
 

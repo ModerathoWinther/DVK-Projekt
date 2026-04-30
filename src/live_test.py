@@ -7,6 +7,7 @@ import argparse
 from time import sleep
 import numpy as np
 import datetime
+import pytz
 from mt5linux import MetaTrader5
 import MetaTrader5 as mt5_local
 import pandas as pd
@@ -19,9 +20,9 @@ import indicators as ind
 
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
-OUTPUT_DIR = os.path.join(f'{RESULTS_DIR}/live')
 WARMUP_BARS = dp.WARMUP_ROWS + 1
-SYMBOL = 'XAUUSD'
+
+MT5_TIMEZONE = pytz.timezone("Europe/Helsinki")
 
 class LiveTest:
 
@@ -34,9 +35,11 @@ class LiveTest:
         port = self.live_test_params['port']
         self.is_containerized = self.live_test_params['is_containerized']
 
+        if self.is_containerized:
+            self.mt5 = MetaTrader5(host='localhost', port=port)
 
-        if self.is_containerized: self.mt5 = MetaTrader5(host='localhost', port=port)
-        else: self.mt5 = mt5_local
+        else:
+            self.mt5 = mt5_local
 
         self.mt5.initialize()
         print(self.mt5.account_info())
@@ -48,8 +51,9 @@ class LiveTest:
             "%Y-%m-%d %H:%M:%S")
         self.next_time_frame = self.time_start
         self.time_frame_minute_size = self.live_test_params.get('time_frame_minute_size')
+        self.test_minute_length = self.live_test_params.get('test_minute_length')
         self.time_end = (self.time_start +
-                         datetime.timedelta(minutes=self.live_test_params.get('test_minute_length')))
+                         datetime.timedelta(minutes=self.test_minute_length))
         self.trading_vol = self.live_test_params.get('trading_volume')
 
         self.env_id = params.get('env_id')
@@ -82,6 +86,11 @@ class LiveTest:
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
         self.input_data = self._get_input_data()
+
+        self.equity_curve = []
+
+        self.env_id = params.get('env_id')
+
 
     def _get_num_states(self):
         n_states = 0
@@ -147,174 +156,52 @@ class LiveTest:
 
         return df
 
-    def _build_observation(self, df: pd.DataFrame) -> torch.Tensor:
-        row = df.iloc[-1]
+    def _build_observation(self):
+        market_features = self.input_data[-1]
+        observation = np.concatenate([
+            market_features,
+            self.trades_state.flatten()
+        ]).astype(np.float32)
+        return torch.tensor(observation, dtype=torch.float32, device=DEVICE)
 
-        if self.data_format == 'ohlcv':
-            market_features = [
-                row['open'], row['high'], row['low'], row['close'], row['volume']
-            ]
-        else:
-            market_features = [
-                row['high_wick'], row['low_wick'], row['trend'], row['volume']
-            ]
-
-        if self.atr:
-            market_features.append(row['atr'])
-        if self.macd:
-            market_features.extend([row['macd'], row['macd_signal'], row['macd_histogram']])
-        if self.rsi:
-            market_features.append(row['rsi'])
-
-        raw_close = self._get_raw_close()
-        trades_obs = self._build_trades_obs(raw_close)
-
-        obs = np.array(market_features, dtype=np.float32)
-        obs = np.concatenate([obs, trades_obs])
-
-        assert len(obs) == self.num_states, (
-            f"Observation shape mismatch: got {len(obs)}, expected {self.num_states}. "
-            f"market={len(market_features)}, trades={len(trades_obs)}"
-        )
-
-        return torch.tensor(obs, dtype=torch.float, device=DEVICE)
-
-    def _build_trades_obs(self, current_price: float) -> np.ndarray:
-        positions = self.mt5.positions_get(symbol="XAUUSD") or []
-        trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
-
-        for i, pos in enumerate(positions[:self.num_trades]):
-            direction = 1.0 if pos.type == self.mt5.POSITION_TYPE_BUY else -1.0
-            sl_dist = abs(pos.sl - current_price) if pos.sl else 0.0
-            tp_dist = abs(pos.tp - current_price) if pos.tp else 0.0
-            trades_obs[i] = [direction, sl_dist, tp_dist]
-        return trades_obs.flatten()
-
-    def _sync_trades_state(self) -> None:
-        open_positions = self.mt5.positions_get(symbol="XAUUSD") or []
-        open_count = len(open_positions)
-        our_count = int(np.sum(self.trades_state[:, 0] != 0))
-
-        if open_count < our_count:
-            to_clear = our_count - open_count
-            cleared = 0
-            for i in range(self.num_trades - 1, -1, -1):
-                if self.trades_state[i, 0] != 0 and cleared < to_clear:
-                    self.trades_state[i] = [0, 0, 0, 0]
-                    self.open_slots += 1
-                    cleared += 1
-
-    def _open_positions_count(self) -> int:
-        positions = self.mt5.positions_get(symbol=SYMBOL)
-        return len(positions) if positions else 0
-
-    def _get_raw_close(self) -> float:
-        tick = self.mt5.symbol_info_tick("XAUUSD")
-        return (tick.ask + tick.bid) / 2 if tick else 0.0
-
-    def _process_action(self, action, price: float) -> None:
-        sl = price - action.direction.value * (price * action.sl)
-        tp = price + action.direction.value * (price * action.tp)
-        for i in range(self.num_trades):
-            if self.trades_state[i, 0] == 0:
-                self.trades_state[i] = [action.direction.value, price, sl, tp]
-                self.open_slots -= 1
-                break
-
-    def _log(self, message: str) -> None:
-        ts = datetime.datetime.now().strftime("%y-%m-%d %H:%M:%S")
-        line = f"[{ts}] {message}"
-        print(line)
-        with open(self.LOG_FILE, 'a') as f:
-            f.write(line + '\n')
-
-    def send_order(self, action, raw_atr: float) -> int:
+    def send_order(self, action):
         if action.direction == Direction.HOLD:
-            self._log("HOLD")
+            print(f"[{datetime.datetime.now()}] HOLD POSITION:")
             return 1
 
-        if self.mt5.positions_total() >= self.num_trades:
-            self._log("Max positions open — skipping")
-            return 0
-
-        tick = self.mt5.symbol_info_tick("XAUUSD")
-        if tick is None:
-            self._log(f"ERROR: no tick data — {self.mt5.last_error()}")
-            return -1
-
+        sl = tp = 0
+        order_type = None
         if action.direction == Direction.BUY:
-            price = tick.ask
+            price = self.mt5.symbol_info_tick("XAUUSD").ask
             order_type = self.mt5.ORDER_TYPE_BUY
-        else:
-            price = tick.bid
+            sl = price - (price * action.sl)
+            tp = price + (price * action.tp)
+        elif action.direction == Direction.SELL:
+            price = self.mt5.symbol_info_tick("XAUUSD").bid
             order_type = self.mt5.ORDER_TYPE_SELL
-
-        sl = price - action.direction.value * action.sl * raw_atr
-        tp = price + action.direction.value * action.tp * raw_atr
+            sl = price + (price * action.sl)
+            tp = price - (price * action.tp)
 
         request = {
             "action": self.mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
             "volume": self.trading_vol,
             "type": order_type,
-            "price": price,
-            "sl": round(sl, 2),
-            "tp": round(tp, 2),
-            "deviation": 10,
-            "magic": 20250430,
-            "comment": f"midas {self.env_id}",
-            "type_time": self.mt5.ORDER_TIME_GTC,
-            "type_filling": self.mt5.ORDER_FILLING_IOC,
+            "sl": sl,
+            "tp": tp,
         }
 
         result = self.mt5.order_send(request)
-        if result is None or result.retcode != self.mt5.TRADE_RETCODE_DONE:
-            err = self.mt5.last_error() if result is None else result.comment
-            self._log(f"ORDER REJECTED: {err}")
+
+        if result is None:
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
             return -1
-
-        self._log(f"ORDER: {action.direction.name} | price={price:.2f} | "
-                  f"sl={sl:.2f} | tp={tp:.2f} | atr={raw_atr:.4f}")
-        return 1
-
-    # def send_order(self, action):
-    #     if action.direction == Direction.HOLD:
-    #         print(f"[{datetime.datetime.now()}] HOLD POSITION:")
-    #         return 1
-    #
-    #     sl = tp = 0
-    #     order_type = None
-    #     if action.direction == Direction.BUY:
-    #         price = self.mt5.symbol_info_tick("XAUUSD").ask
-    #         order_type = self.mt5.ORDER_TYPE_BUY
-    #         sl = price - (price * action.sl)
-    #         tp = price + (price * action.tp)
-    #     elif action.direction == Direction.SELL:
-    #         price = self.mt5.symbol_info_tick("XAUUSD").bid
-    #         order_type = self.mt5.ORDER_TYPE_SELL
-    #         sl = price + (price * action.sl)
-    #         tp = price - (price * action.tp)
-    #
-    #     request = {
-    #         "action": self.mt5.TRADE_ACTION_DEAL,
-    #         "symbol": "XAUUSD",
-    #         "volume": self.trading_vol,
-    #         "type": order_type,
-    #         "sl": sl,
-    #         "tp": tp,
-    #     }
-    #
-    #     result = self.mt5.order_send(request)
-    #
-    #     if result is None:
-    #         print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
-    #         return -1
-    #     elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
-    #         print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
-    #         return -1
-    #     else:
-    #         print(f"[{datetime.datetime.now()}] ORDER PLACED")
-    #         return 1
+        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
+            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
+            return -1
+        else:
+            print(f"[{datetime.datetime.now()}] ORDER PLACED")
+            return 1
 
     def close_all_positions(self):
         for pos in self.mt5.positions_get():
@@ -329,49 +216,105 @@ class LiveTest:
             self.mt5.order_send(request)
 
     def run(self):
-        print(f'build_observation: {self._build_observation()}')
-        if self.time_start < datetime.datetime.now():
-            raise ValueError("TIME START IS IN THE PAST")
+        os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
 
-        print(f"\nPROGRAM START: {datetime.datetime.now()}")
-        print(f"TRADE START: {self.time_start}")
-        print(f"TRADE END: {self.time_end}\n")
-        print(self.next_time_frame)
+        for i in range(45):
+            print(f'build_observation: {self._build_observation()}')
+            if self.time_start < datetime.datetime.now():
+                raise ValueError("TIME START IS IN THE PAST")
 
-        while True:
-            now = datetime.datetime.now()
+            print(f"\nPROGRAM START: {datetime.datetime.now()}")
+            print(f"TRADE START: {self.time_start}")
+            print(f"TRADE END: {self.time_end}\n")
 
-            if now > self.next_time_frame:
+            while True:
+                if datetime.datetime.now() > self.next_time_frame:
+                    if self.next_time_frame >= self.time_end:
+                        break
 
-                self.input_data = self._get_input_data()
-                self._sync_trades_state()
-                state = self._build_observation(self.input_data)
+                    # use get_market_data to fetch last candlestick
 
-                with torch.no_grad():
-                    q_values = self.dqn(state.unsqueeze(0)).squeeze()
-                    action_index = int(q_values.argmax().item())
+                    # todo Translate in-data to format used in training (normalize, etc)
 
-                action = ACTION_SPACE[action_index]
+                    # todo Let model decide action to take
+                    action = ACTION_SPACE[2]
+                    if self.mt5.positions_total() < self.num_trades:
+                        self.send_order(action)
 
-                if self.mt5.positions_total() < self.num_trades:
-                    self.send_order(action)
+                    self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
+                    self.equity_curve.append(self.mt5.account_info().balance)
+                else:
+                    sleep(0.01)
 
-                if self.next_time_frame >= self.time_end:
-                    break
-                self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
-                #print(self.next_time_frame)
-                #print(self.time_end)
+
+            self.close_all_positions()
+            print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
+
+            # Let terminal save deals
+            sleep(1)
+
+            self.equity_curve.append(self.mt5.account_info().balance)
+            current_equity_curve = self.equity_curve[-(self.test_minute_length + 1):]
+            print(self.equity_curve)
+            print(current_equity_curve)
+
+            # Translate to mt5 timezones to get correct window
+            eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
+            eest_start = self.time_start.astimezone(MT5_TIMEZONE)
+            eest_start = eest_start.replace(tzinfo=None)
+            deals = self.mt5.history_deals_get(eest_start, eest_now, group="XAUUSD")
+
+            try:
+                original_df = pd.read_csv(f'results/live_test/{self.env_id}/{self.env_id}.csv')
+            except FileNotFoundError:
+                original_df = pd.DataFrame(
+                    columns=['id', 'win_rate', 'loss_rate', 'profit_factor', 'expectancy', 'max_drawdown'])
+
+            if len(deals) > 0:
+                df = pd.DataFrame([d._asdict() for d in deals])
+                df = df[df['entry'] == 1]
+
+                stats = self.calc_stats(current_equity_curve, df)
+                stats['id'] = self.env_id
             else:
-                sleep(0.01)
+                stats = {'id': self.env_id, 'win_rate': None, 'loss_rate': None, 'profit_factor': None,
+                         'expectancy': None, 'max_drawdown': None}
 
+            print(stats)
+            new_df = pd.concat([original_df, pd.DataFrame([stats])], ignore_index=True)
+            new_df.to_csv(f'results/live_test/{self.env_id}/{self.env_id}.csv', index=False)
 
-        self.close_all_positions()
-        print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
+            self.time_start = datetime.datetime.now() + datetime.timedelta(minutes=1)
+            self.time_start = self.time_start.replace(second=0, microsecond=0)
+            self.next_time_frame = self.time_start
+            self.time_end = self.time_start + datetime.timedelta(minutes=self.test_minute_length)
 
-        # todo Use history_deals_get or history_orders_get to extract results (not really sure if they work)
-
+        print(util.calculate_sharpe_ratio(self.equity_curve))
         return 1
 
+    def calc_stats(self, equity_curve, deals):
+
+        profits = deals['profit'].values
+
+        wins = profits[profits > 0]
+        losses = profits[profits < 0]
+
+        win_rate = len(wins) / len(profits)
+        loss_rate = len(losses) / len(profits)
+        profit_factor = wins.sum() / abs(losses.sum())
+        expectancy = profits.mean()
+
+        peak = np.maximum.accumulate(equity_curve)
+        drawdowns = (equity_curve - peak) / peak
+        max_drawdown = np.min(drawdowns)
+
+        return {
+            "win_rate": win_rate,
+            "loss_rate": loss_rate,
+            "profit_factor": profit_factor,
+            "expectancy": expectancy,
+            "max_drawdown": max_drawdown,
+        }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MT5 login details.')

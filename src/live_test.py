@@ -51,8 +51,6 @@ class LiveTest:
         self.macd = self.env_params['macd']
         self.rsi = self.env_params['rsi']
         self.data_format = self.env_params['data_format']
-        self.price_mean = 0
-        self.price_std = 0
 
         self.z_scores = load_z_score_params(self.data_format, self.atr, self.macd)
 
@@ -61,16 +59,11 @@ class LiveTest:
 
         self.num_actions = len(ACTION_SPACE)
         self.num_states = self._get_num_states()
-        print(self.num_actions, self.num_states)
         self.dqn = DQN(self.num_states, self.num_actions, self.fc1_nodes, self.enable_dueling_dqn).to(DEVICE)
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
         self.input_data = self._get_input_data()
-
-        print(f'input_data: {self.input_data}')
-        print(self.time_start)
-        print(self.time_end)
         self.send_order(ACTION_SPACE[2])
 
 
@@ -80,13 +73,15 @@ class LiveTest:
         if self.macd: n_states += 3
         if self.rsi: n_states += 1
         n_states += 5 if self.data_format == 'ohlcv' else 4
-        n_states += self.num_trades * 3
+        n_states += self.num_trades * 4
         return n_states
 
     def _get_input_data(self):
         df = self.get_market_data()
         df = self._compute_indicators(df)
-        return self._normalize_input(df)
+        df = self._normalize_input(df)
+        price_feature_cols = [col for col in df.columns if col != 'date']
+        return df[price_feature_cols]
 
     def get_market_data(self) -> pd.DataFrame:
         rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
@@ -134,6 +129,9 @@ class LiveTest:
             df['rsi'] = df['rsi'] / 100.0
 
         return df
+
+    def _build_observation(self):
+
 
     def send_order(self, action):
         if action.direction == Direction.HOLD:

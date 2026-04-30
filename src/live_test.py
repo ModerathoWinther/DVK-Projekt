@@ -1,10 +1,11 @@
-import argparse
 import os
-from time import sleep
-from util import load_z_score_params
-
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
+
+from util import load_z_score_params
+import argparse
+from time import sleep
+import numpy as np
 import datetime
 from mt5linux import MetaTrader5
 import pandas as pd
@@ -59,6 +60,11 @@ class LiveTest:
 
         self.num_actions = len(ACTION_SPACE)
         self.num_states = self._get_num_states()
+
+        self.trades_state = np.zeros((self.num_trades, 4), dtype=np.float32)
+        self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
+        self.open_slots = self.num_trades
+
         self.dqn = DQN(self.num_states, self.num_actions, self.fc1_nodes, self.enable_dueling_dqn).to(DEVICE)
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
@@ -131,6 +137,12 @@ class LiveTest:
         return df
 
     def _build_observation(self):
+        market_features = self.input_data[-1]
+        observation = np.concatenate([
+            market_features,
+            self.trades_state.flatten()
+        ]).astype(np.float32)
+        return torch.tensor(observation, dtype=torch.float32, device=DEVICE)
 
 
     def send_order(self, action):

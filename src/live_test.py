@@ -7,6 +7,7 @@ import argparse
 from time import sleep
 import numpy as np
 import datetime
+import pytz
 from mt5linux import MetaTrader5
 import MetaTrader5 as mt5_local
 import pandas as pd
@@ -20,6 +21,8 @@ import indicators as ind
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
 WARMUP_BARS = dp.WARMUP_ROWS + 1
+
+MT5_TIMEZONE = pytz.timezone("Europe/Helsinki")
 
 class LiveTest:
 
@@ -81,7 +84,6 @@ class LiveTest:
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
         self.input_data = self._get_input_data()
-        self.send_order(ACTION_SPACE[2])
 
 
     def _get_num_states(self):
@@ -222,6 +224,9 @@ class LiveTest:
         print(self._build_observation())
         while True:
             if datetime.datetime.now() > self.next_time_frame:
+                if self.next_time_frame >= self.time_end:
+                    break
+
                 # use get_market_data to fetch last candlestick
 
                 # todo Translate in-data to format used in training (normalize, etc)
@@ -231,8 +236,6 @@ class LiveTest:
                 if self.mt5.positions_total() < self.num_trades:
                     self.send_order(action)
 
-                if self.next_time_frame >= self.time_end:
-                    break
                 self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
                 #print(self.next_time_frame)
                 #print(self.time_end)
@@ -243,7 +246,19 @@ class LiveTest:
         self.close_all_positions()
         print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
 
-        # todo Use history_deals_get or history_orders_get to extract results (not really sure if they work)
+        # Let terminal save deals
+        sleep(1)
+
+        eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
+        eest_start = self.time_start.astimezone(MT5_TIMEZONE)
+        eest_start = eest_start.replace(tzinfo=None)
+        deals = self.mt5.history_deals_get(eest_start, eest_now, group="XAUUSD")
+
+        if len(deals) > 0:
+            df = pd.DataFrame([d._asdict() for d in deals])
+            df = df[df['entry'] == 1]
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+            print(df)
 
         return 1
 

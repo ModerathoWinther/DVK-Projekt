@@ -27,12 +27,12 @@ midas-train1:
     data_format: "ohlcv"
     episode_length: 5000
   live_test:
-    time_start: "2026-04-30 05:38:00"
+    time_start: "2026-04-30 17:18:00"
     time_frame_minute_size: 1
-    test_minute_length: 3
+    test_minute_length: 1
     trading_volume: 0.1
     port: 8001
-    is_containerized: False
+    is_containerized: True
   env_id: 'midas-train1'
   learning_rate_a: 0.0001
   epsilon_init: 1.0

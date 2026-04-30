@@ -19,7 +19,9 @@ import indicators as ind
 
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
+OUTPUT_DIR = os.path.join(f'{RESULTS_DIR}/live')
 WARMUP_BARS = dp.WARMUP_ROWS + 1
+SYMBOL = 'XAUUSD'
 
 class LiveTest:
 
@@ -79,8 +81,7 @@ class LiveTest:
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
-        self._get_input_data()
-        self.send_order(ACTION_SPACE[2])
+        self.input_data = self._get_input_data()
 
     def _get_num_states(self):
         n_states = 0
@@ -97,7 +98,7 @@ class LiveTest:
         df = self._compute_indicators(df)
         df = self._normalize_input(df)
         price_feature_cols = [col for col in df.columns if col != 'date']
-        self.input_data = df[price_feature_cols].values
+        return df[price_feature_cols].values
 
     def get_market_data(self) -> pd.DataFrame:
         rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
@@ -146,13 +147,48 @@ class LiveTest:
 
         return df
 
-    def _build_observation(self):
-        market_features = self.input_data[-1]
-        observation = np.concatenate([
-            market_features,
-            self.trades_state.flatten()
-        ]).astype(np.float32)
-        return torch.tensor(observation, dtype=torch.float32, device=DEVICE)
+    def _build_observation(self, df: pd.DataFrame) -> torch.Tensor:
+        row = df.iloc[-1]
+
+        if self.data_format == 'ohlcv':
+            market_features = [
+                row['open'], row['high'], row['low'], row['close'], row['volume']
+            ]
+        else:
+            market_features = [
+                row['high_wick'], row['low_wick'], row['trend'], row['volume']
+            ]
+
+        if self.atr:
+            market_features.append(row['atr'])
+        if self.macd:
+            market_features.extend([row['macd'], row['macd_signal'], row['macd_histogram']])
+        if self.rsi:
+            market_features.append(row['rsi'])
+
+        raw_close = self._get_raw_close()
+        trades_obs = self._build_trades_obs(raw_close)
+
+        obs = np.array(market_features, dtype=np.float32)
+        obs = np.concatenate([obs, trades_obs])
+
+        assert len(obs) == self.num_states, (
+            f"Observation shape mismatch: got {len(obs)}, expected {self.num_states}. "
+            f"market={len(market_features)}, trades={len(trades_obs)}"
+        )
+
+        return torch.tensor(obs, dtype=torch.float, device=DEVICE)
+
+    def _build_trades_obs(self, current_price: float) -> np.ndarray:
+        positions = self.mt5.positions_get(symbol="XAUUSD") or []
+        trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
+
+        for i, pos in enumerate(positions[:self.num_trades]):
+            direction = 1.0 if pos.type == self.mt5.POSITION_TYPE_BUY else -1.0
+            sl_dist = abs(pos.sl - current_price) if pos.sl else 0.0
+            tp_dist = abs(pos.tp - current_price) if pos.tp else 0.0
+            trades_obs[i] = [direction, sl_dist, tp_dist]
+        return trades_obs.flatten()
 
     def _sync_trades_state(self) -> None:
         open_positions = self.mt5.positions_get(symbol="XAUUSD") or []
@@ -168,6 +204,14 @@ class LiveTest:
                     self.open_slots += 1
                     cleared += 1
 
+    def _open_positions_count(self) -> int:
+        positions = self.mt5.positions_get(symbol=SYMBOL)
+        return len(positions) if positions else 0
+
+    def _get_raw_close(self) -> float:
+        tick = self.mt5.symbol_info_tick("XAUUSD")
+        return (tick.ask + tick.bid) / 2 if tick else 0.0
+
     def _process_action(self, action, price: float) -> None:
         sl = price - action.direction.value * (price * action.sl)
         tp = price + action.direction.value * (price * action.tp)
@@ -177,44 +221,100 @@ class LiveTest:
                 self.open_slots -= 1
                 break
 
-    def send_order(self, action):
+    def _log(self, message: str) -> None:
+        ts = datetime.datetime.now().strftime("%y-%m-%d %H:%M:%S")
+        line = f"[{ts}] {message}"
+        print(line)
+        with open(self.LOG_FILE, 'a') as f:
+            f.write(line + '\n')
+
+    def send_order(self, action, raw_atr: float) -> int:
         if action.direction == Direction.HOLD:
-            print(f"[{datetime.datetime.now()}] HOLD POSITION:")
+            self._log("HOLD")
             return 1
 
-        sl = tp = 0
-        order_type = None
+        if self.mt5.positions_total() >= self.num_trades:
+            self._log("Max positions open — skipping")
+            return 0
+
+        tick = self.mt5.symbol_info_tick("XAUUSD")
+        if tick is None:
+            self._log(f"ERROR: no tick data — {self.mt5.last_error()}")
+            return -1
+
         if action.direction == Direction.BUY:
-            price = self.mt5.symbol_info_tick("XAUUSD").ask
+            price = tick.ask
             order_type = self.mt5.ORDER_TYPE_BUY
-            sl = price - (price * action.sl)
-            tp = price + (price * action.tp)
-        elif action.direction == Direction.SELL:
-            price = self.mt5.symbol_info_tick("XAUUSD").bid
+        else:
+            price = tick.bid
             order_type = self.mt5.ORDER_TYPE_SELL
-            sl = price + (price * action.sl)
-            tp = price - (price * action.tp)
+
+        sl = price - action.direction.value * action.sl * raw_atr
+        tp = price + action.direction.value * action.tp * raw_atr
 
         request = {
             "action": self.mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
             "volume": self.trading_vol,
             "type": order_type,
-            "sl": sl,
-            "tp": tp,
+            "price": price,
+            "sl": round(sl, 2),
+            "tp": round(tp, 2),
+            "deviation": 10,
+            "magic": 20250430,
+            "comment": f"midas {self.env_id}",
+            "type_time": self.mt5.ORDER_TIME_GTC,
+            "type_filling": self.mt5.ORDER_FILLING_IOC,
         }
 
         result = self.mt5.order_send(request)
+        if result is None or result.retcode != self.mt5.TRADE_RETCODE_DONE:
+            err = self.mt5.last_error() if result is None else result.comment
+            self._log(f"ORDER REJECTED: {err}")
+            return -1
 
-        if result is None:
-            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
-            return -1
-        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
-            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
-            return -1
-        else:
-            print(f"[{datetime.datetime.now()}] ORDER PLACED")
-            return 1
+        self._log(f"ORDER: {action.direction.name} | price={price:.2f} | "
+                  f"sl={sl:.2f} | tp={tp:.2f} | atr={raw_atr:.4f}")
+        return 1
+
+    # def send_order(self, action):
+    #     if action.direction == Direction.HOLD:
+    #         print(f"[{datetime.datetime.now()}] HOLD POSITION:")
+    #         return 1
+    #
+    #     sl = tp = 0
+    #     order_type = None
+    #     if action.direction == Direction.BUY:
+    #         price = self.mt5.symbol_info_tick("XAUUSD").ask
+    #         order_type = self.mt5.ORDER_TYPE_BUY
+    #         sl = price - (price * action.sl)
+    #         tp = price + (price * action.tp)
+    #     elif action.direction == Direction.SELL:
+    #         price = self.mt5.symbol_info_tick("XAUUSD").bid
+    #         order_type = self.mt5.ORDER_TYPE_SELL
+    #         sl = price + (price * action.sl)
+    #         tp = price - (price * action.tp)
+    #
+    #     request = {
+    #         "action": self.mt5.TRADE_ACTION_DEAL,
+    #         "symbol": "XAUUSD",
+    #         "volume": self.trading_vol,
+    #         "type": order_type,
+    #         "sl": sl,
+    #         "tp": tp,
+    #     }
+    #
+    #     result = self.mt5.order_send(request)
+    #
+    #     if result is None:
+    #         print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
+    #         return -1
+    #     elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
+    #         print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
+    #         return -1
+    #     else:
+    #         print(f"[{datetime.datetime.now()}] ORDER PLACED")
+    #         return 1
 
     def close_all_positions(self):
         for pos in self.mt5.positions_get():
@@ -243,20 +343,16 @@ class LiveTest:
 
             if now > self.next_time_frame:
 
-                self._get_input_data()
-
+                self.input_data = self._get_input_data()
                 self._sync_trades_state()
-
-                state = self._build_observation()
+                state = self._build_observation(self.input_data)
 
                 with torch.no_grad():
-                    action_idx = self.dqn(state.unsqueeze(dim=0)).squeeze().argmax()
-                action = ACTION_SPACE[action_idx]
+                    q_values = self.dqn(state.unsqueeze(0)).squeeze()
+                    action_index = int(q_values.argmax().item())
 
-                print(f"[{now}] Action: {action.direction.name}, sl={action.sl}  tp={action.tp}, open_slots={self.open_slots}")
+                action = ACTION_SPACE[action_index]
 
-                # todo Let model decide action to take
-                action = ACTION_SPACE[2]
                 if self.mt5.positions_total() < self.num_trades:
                     self.send_order(action)
 

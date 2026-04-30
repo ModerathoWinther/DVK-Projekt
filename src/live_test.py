@@ -6,7 +6,7 @@ from util import load_z_score_params
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 import datetime
-import MetaTrader5 as mt5
+from mt5linux import MetaTrader5
 import pandas as pd
 import torch
 import yaml
@@ -19,7 +19,6 @@ DEVICE = 'cpu'
 RESULTS_DIR = 'results'
 WARMUP_BARS = dp.WARMUP_ROWS + 1
 
-
 class LiveTest:
 
     def __init__(self, params):
@@ -28,6 +27,11 @@ class LiveTest:
             params = all_hyperparameter_sets[params]
 
         live_test_params = params.get('live_test')
+        port = live_test_params['port']
+        self.mt5 = MetaTrader5(host='localhost', port=port)
+        self.mt5.initialize()
+        print(self.mt5.account_info())
+        print(self.mt5.version())
 
         self.time_start = datetime.datetime.strptime(
             live_test_params.get('time_start'),
@@ -63,6 +67,7 @@ class LiveTest:
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
         self.input_data = self._get_input_data()
+
         print(f'input_data: {self.input_data}')
         print(self.time_start)
         print(self.time_end)
@@ -84,7 +89,7 @@ class LiveTest:
         return self._normalize_input(df)
 
     def get_market_data(self) -> pd.DataFrame:
-        rates = mt5.copy_rates_from_pos("XAUUSD", mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
+        rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
@@ -138,18 +143,18 @@ class LiveTest:
         sl = tp = 0
         order_type = None
         if action.direction == Direction.BUY:
-            price = mt5.symbol_info_tick("XAUUSD").ask
-            order_type = mt5.ORDER_TYPE_BUY
+            price = self.mt5.symbol_info_tick("XAUUSD").ask
+            order_type = self.mt5.ORDER_TYPE_BUY
             sl = price - (price * action.sl)
             tp = price + (price * action.tp)
         elif action.direction == Direction.SELL:
-            price = mt5.symbol_info_tick("XAUUSD").bid
-            order_type = mt5.ORDER_TYPE_SELL
+            price = self.mt5.symbol_info_tick("XAUUSD").bid
+            order_type = self.mt5.ORDER_TYPE_SELL
             sl = price + (price * action.sl)
             tp = price - (price * action.tp)
 
         request = {
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": self.mt5.TRADE_ACTION_DEAL,
             "symbol": "XAUUSD",
             "volume": self.trading_vol,
             "type": order_type,
@@ -157,27 +162,39 @@ class LiveTest:
             "tp": tp,
         }
 
-        result = mt5.order_send(request)
+        result = self.mt5.order_send(request)
 
         if result is None:
-            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {mt5.last_error()}")
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
             return -1
-        elif result.retcode != mt5.TRADE_RETCODE_DONE:
+        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
             print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
             return -1
         else:
-            print(f"ORDER PLACED")
+            print(f"[{datetime.datetime.now()}] ORDER PLACED")
             return 1
 
     def close_all_positions(self):
-        for pos in mt5.positions_get():
-            mt5.Close(symbol="XAUUSD", ticket=pos.ticket)
+        for pos in self.mt5.positions_get():
+            request = {
+                "action": self.mt5.TRADE_ACTION_DEAL,
+                "position": pos.ticket,
+                "symbol": pos.symbol,
+                "volume": pos.volume,
+                "type": self.mt5.ORDER_TYPE_BUY if pos.type == 1 else self.mt5.ORDER_TYPE_SELL,
+                "type_time": self.mt5.ORDER_TIME_GTC
+            }
+            self.mt5.order_send(request)
 
     def run(self):
+        if self.time_start < datetime.datetime.now():
+            raise ValueError("TIME START IS IN THE PAST")
+
         print(f"\nPROGRAM START: {datetime.datetime.now()}")
         print(f"TRADE START: {self.time_start}")
         print(f"TRADE END: {self.time_end}\n")
 
+        print(self.next_time_frame)
         while True:
             if datetime.datetime.now() > self.next_time_frame:
                 # use get_market_data to fetch last candlestick
@@ -185,15 +202,18 @@ class LiveTest:
                 # todo Translate in-data to format used in training (normalize, etc)
 
                 # todo Let model decide action to take
-                action = ACTION_SPACE[0]
-                if mt5.positions_total() < self.num_trades:
+                action = ACTION_SPACE[2]
+                if self.mt5.positions_total() < self.num_trades:
                     self.send_order(action)
 
                 if self.next_time_frame >= self.time_end:
                     break
                 self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
+                #print(self.next_time_frame)
+                #print(self.time_end)
             else:
                 sleep(0.01)
+
 
         self.close_all_positions()
         print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
@@ -208,7 +228,5 @@ if __name__ == '__main__':
     parser.add_argument('hyperparameters', help='')
     # parser.add_argument(action='store_true')
     args = parser.parse_args()
-    # mt5.initialize(args.mt5_details)
-    mt5.initialize()
     midas = LiveTest(params=args.hyperparameters)
     midas.run()

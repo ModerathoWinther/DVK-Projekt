@@ -27,10 +27,11 @@ midas-train1:
     data_format: "ohlcv"
     episode_length: 5000
   live_test:
-    time_start: "2026-04-28 01:52:00"
+    time_start: "2026-04-30 05:38:00"
     time_frame_minute_size: 1
     test_minute_length: 3
-    trading_volume: 1
+    trading_volume: 0.1
+    port: 8001
   env_id: 'midas-train1'
   learning_rate_a: 0.0001
   epsilon_init: 1.0
@@ -75,10 +76,11 @@ midas-train2:
     data_format: "ohlcv"
     episode_length: 5000
   live_test:
-    time_start: "2026-04-28 01:52:00"
+    time_start: "2026-04-30 05:38:00"
     time_frame_minute_size: 1
     test_minute_length: 3
-    trading_volume: 1
+    trading_volume: 0.1
+    port: 8002
   env_id: 'midas-train2'
   learning_rate_a: 0.0002
   epsilon_init: 1.0
@@ -118,7 +120,7 @@ midas-wick-train:
     data_format: "wick"
     episode_length: 5000
   live_test:
-    time_start: "2026-04-28 01:52:00"
+    time_start: "2026-04-28 05:00:00"
     time_frame_minute_size: 1
     test_minute_length: 3
     trading_volume: 1   
@@ -136,6 +138,54 @@ midas-wick-train:
   min_buffer_fill: 10000
   mini_batch_size: 128  
   max_episodes: 500
+
+midas-wick-train2:
+  env_make_params:
+    split: "train"
+    num_trades: 3
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000
+    transaction_cost: 0.
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  mt5_details:
+    login: username
+    password: password
+    server: server.se
+    num_trades: 3
+    atr: true
+    macd: true
+    rsi: true
+    data_format: "wick"
+    episode_length: 5000
+  live_test:
+    time_start: "2026-04-28 01:52:00"
+    time_frame_minute_size: 1
+    test_minute_length: 3
+    trading_volume: 1
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  env_id: 'midas-wick-train2'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999999
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 750
 
 
 #midas-test1:

@@ -46,6 +46,11 @@ shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/normalized/i
 
 
 class TestTradingEnvironment(unittest.TestCase):
+
+    def normalize_return(self, pnl):
+        growth = (np.float32(pnl) / np.float32(self.current_equity))
+        return growth * 1000
+
     def setUp(self):
         self.env = TradingEnvironment(PARAMS)
         self.current_equity = self.env.initial_capital
@@ -60,7 +65,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert_almost_equal((TP_WIN - TRANSACTION_COST) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return(TP_WIN - TRANSACTION_COST), decimal=4)
         self.current_equity += (TP_WIN - TRANSACTION_COST)
 
         # Buy, hit sl
@@ -69,7 +74,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert_almost_equal((SL_LOSS - TRANSACTION_COST) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return(SL_LOSS - TRANSACTION_COST), decimal=4)
         self.current_equity += (SL_LOSS - TRANSACTION_COST)
 
         # Sell, hit tp
@@ -78,7 +83,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert_almost_equal((TP_WIN - TRANSACTION_COST) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return(TP_WIN - TRANSACTION_COST), decimal=4)
         self.current_equity += (TP_WIN - TRANSACTION_COST)
 
         # Sell, hit sl
@@ -87,21 +92,21 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert_almost_equal((SL_LOSS - TRANSACTION_COST) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return(SL_LOSS - TRANSACTION_COST), decimal=4)
         self.current_equity += (SL_LOSS - TRANSACTION_COST)
 
         # Buy, hit tp, with slippage
         env.step(BUY_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert_almost_equal((TP_WIN + 0.5 - TRANSACTION_COST) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return(TP_WIN + 0.5 - TRANSACTION_COST), decimal=4)
         self.current_equity += (TP_WIN + 0.5 - TRANSACTION_COST)
 
         # Buy, hit sl, with slippage
         env.step(BUY_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert_almost_equal((SL_LOSS - 0.5 - TRANSACTION_COST) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return(SL_LOSS - 0.5 - TRANSACTION_COST), decimal=4)
         self.current_equity += (SL_LOSS - 0.5 - TRANSACTION_COST)
 
         # End of episode closes trades
@@ -111,7 +116,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         _, reward, terminated, _, _ = env.step(HOLD_ACTION)
         assert terminated == True
-        assert_almost_equal((0.5 - TRANSACTION_COST) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return(0.5 - TRANSACTION_COST), decimal=4)
 
         # Reset env
         equity_curve = env.equity_curve
@@ -158,7 +163,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(BUY_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert reward == (SL_LOSS - TRANSACTION_COST) / self.current_equity
+        assert_almost_equal(reward, self.normalize_return(SL_LOSS - TRANSACTION_COST), decimal=4)
 
     def test_multiple_trades(self):
         env = self.env
@@ -169,7 +174,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)
         _, reward, _, _, _ = env.step(HOLD_ACTION)
-        assert_almost_equal(((TP_WIN * 2) - (TRANSACTION_COST * 2)) / self.current_equity, reward)
+        assert_almost_equal(reward, self.normalize_return((TP_WIN * 2) - (TRANSACTION_COST * 2)), decimal=4)
         assert len(env.closed_trades) == 2
 
     def test_equity_curve(self):

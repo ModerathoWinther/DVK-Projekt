@@ -48,8 +48,8 @@ class TradingEnvironment(gym.Env):
         self.col_vol = 4
 
         if self.data_format == 'ohlcv':
-            self.col_atr = 5
-            self.col_macd = 6
+            self.col_atr = 6
+            self.col_macd = 7
             self.col_rsi = 9
             base_cols = list(range(5))
         else:
@@ -134,10 +134,10 @@ class TradingEnvironment(gym.Env):
     def step(self, action: int):
         current_prices = self.prices[self.current_step]
         open, high, low, close = current_prices[self.col_open], current_prices[self.col_high], current_prices[self.col_low], current_prices[self.col_close]
+        prev_equity = self.current_equity
 
         realized_pnl, _ = self._process_trades(open, high, low)
         reward = realized_pnl
-
 
         self.current_step += 1
         self.current_equity += realized_pnl
@@ -148,19 +148,17 @@ class TradingEnvironment(gym.Env):
             open, high, low = current_prices[self.col_open], current_prices[self.col_high], current_prices[self.col_low]
             high_low_hit_r, _ = self._process_trades(open, high, low)
             self.current_equity += high_low_hit_r
-            reward += high_low_hit_r
 
             term_r = self._calculate_terminated_reward()
             self.current_equity += term_r
-            reward += term_r
 
         else:
             action = self.action_list[action]
             self._process_action(action)
 
         self._update_trades_obs(close)
-        reward  /= self.equity_curve[-1]
-        if realized_pnl > 100 or realized_pnl < -100: print(realized_pnl)
+        reward = ((self.current_equity - prev_equity) / prev_equity) * 1000
+
         self.equity_curve.append(self.current_equity)
         return self._get_observation(), reward, is_last_step, False, {}
 
@@ -201,16 +199,14 @@ class TradingEnvironment(gym.Env):
             hit_tp = (direction > 0 and high >= tp) or (direction < 0 and low  <= tp)
 
             if open_hit_sl or open_hit_tp:
-                pnl = (open - entry_price) * direction
+                pnl = open - entry_price * direction
                 realized_pnl = pnl - self.transaction_cost * abs(entry_price)
                 total_realized_pnl += realized_pnl
                 self.trades_state[i] = [0, 0, 0, 0]
                 self.open_slots += 1
                 closed += 1
                 self.closed_trades.append(realized_pnl)
-
             elif hit_sl or hit_tp:
-
                 pnl = (sl - entry_price) * direction if hit_sl else (tp - entry_price) * direction
                 realized_pnl = pnl - self.transaction_cost * abs(entry_price)
                 total_realized_pnl += realized_pnl
@@ -218,8 +214,6 @@ class TradingEnvironment(gym.Env):
                 self.open_slots += 1
                 closed += 1
                 self.closed_trades.append(realized_pnl)
-
-
 
         return total_realized_pnl, closed
 
@@ -242,18 +236,10 @@ class TradingEnvironment(gym.Env):
         print(f"Close range       : {closes.min():.4f} to {closes.max():.4f}")
         print(f"Median close      : {np.median(closes):.4f}")
         print(f"Median bar range  : {median_range:.6f}")
-
         if self.atr:
-            print(f"Median ATR        : {np.median(self.prices[:, self.col_real_atr]):.6f}")
-
+            print(f"Median ATR        : {np.median(self.input_data[:, self.col_atr]):.6f}")
         sl_levels = [a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]
         tp_levels = [a.tp for a in ACTION_SPACE if a.direction != Direction.HOLD]
-        median_atr = np.median(self.prices[:, self.col_real_atr])
-        closes = self.prices[:, self.col_close]
-        median_close = np.median(closes)
-        print(f"SL as % of close  : {[f'{s * 100:.2f}%' for s in sorted(set(sl_levels))]}")
-        print(
-            f"SL as × ATR       : {[f'{(s * float(median_close)) / float(median_atr):.2f}×' for s in sorted(set(sl_levels))]}")
         print(f"SL levels         : {sorted(set(sl_levels))}")
         print(f"TP levels         : {sorted(set(tp_levels))}")
 

@@ -28,7 +28,7 @@ def load_z_score_params(data_format, atr, macd):
     return active_params
 
 
-def calculate_sharpe_ratio(equity_curve) -> float:
+def calculate_sharpe_ratio(equity_curve, bars_per_day) -> float:
     if len(equity_curve) < 2:
         return 0.0
     equity = np.array(equity_curve)
@@ -45,7 +45,7 @@ def calculate_sharpe_ratio(equity_curve) -> float:
 
     total_bars = len(equity_curve)
     n_trades = len(active_returns)
-    trades_per_year = (n_trades / total_bars) * (252 * 92)
+    trades_per_year = (n_trades / total_bars) * (252 * bars_per_day)
 
     sharpe = (mean_ret / std_ret) * np.sqrt(trades_per_year)
     return float(sharpe)

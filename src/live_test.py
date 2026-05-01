@@ -17,10 +17,12 @@ from action_space import Direction, ACTION_SPACE
 from dqn import DQN
 import data_process as dp
 import indicators as ind
+import util
 
 DEVICE = 'cpu'
 RESULTS_DIR = 'results'
 WARMUP_BARS = dp.WARMUP_ROWS + 1
+SYMBOL = "XAUUSD"
 
 MT5_TIMEZONE = pytz.timezone("Europe/Helsinki")
 
@@ -40,6 +42,7 @@ class LiveTest:
 
         else:
             self.mt5 = mt5_local
+            mt5_local.initialize()
 
         self.mt5.initialize()
         print(self.mt5.account_info())
@@ -85,7 +88,7 @@ class LiveTest:
 
         self.dqn.load_state_dict(torch.load(self.MODEL_FILE))
         self.dqn.eval()
-        self.input_data = self._get_input_data()
+        self._get_input_data()
 
         self.equity_curve = []
 
@@ -99,7 +102,6 @@ class LiveTest:
         if self.rsi: n_states += 1
         n_states += 5 if self.data_format == 'ohlcv' else 4
         n_states += (self.num_trades * 3)
-        print(f'n_states. {n_states}')
         return n_states
 
     def _get_input_data(self):
@@ -107,11 +109,12 @@ class LiveTest:
         df = self._compute_indicators(df)
         df = self._normalize_input(df)
         price_feature_cols = [col for col in df.columns if col != 'date']
-        return df[price_feature_cols].values
+        self.input_data = df[price_feature_cols].values
 
     def get_market_data(self) -> pd.DataFrame:
-        rates = self.mt5.copy_rates_from_pos("XAUUSD", self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
+        rates = self.mt5.copy_rates_from_pos(SYMBOL, self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
+        print(df)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
         df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
@@ -156,13 +159,66 @@ class LiveTest:
 
         return df
 
-    def _build_observation(self):
+    def _build_observation(self) -> torch.Tensor:
         market_features = self.input_data[-1]
-        observation = np.concatenate([
+
+        tick = self.mt5.symbol_info_tick(SYMBOL)
+        current_price = tick.bid if tick else 0.0
+
+        trades_features = self._build_trades_obs(current_price)
+
+        obs = np.concatenate([
             market_features,
-            self.trades_state.flatten()
+            trades_features
         ]).astype(np.float32)
-        return torch.tensor(observation, dtype=torch.float32, device=DEVICE)
+
+        assert len(obs) == self.num_states, (
+            f"Got obs count: {len(obs)} but expected: {self.num_states}. "
+            f"Market: {len(market_features)}, Trades: {len(trades_features)}"
+        )
+
+        return torch.tensor(obs, dtype=torch.float32, device=DEVICE)
+
+    def _build_trades_obs(self, current_price: float) -> np.ndarray:
+        positions = self.mt5.positions_get(symbol=SYMBOL) or []
+        trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
+
+        for i, pos in enumerate(positions[:self.num_trades]):
+            direction = 1.0 if pos.type == self.mt5.POSITION_TYPE_BUY else -1.0
+            sl_dist = abs(pos.sl - current_price) if pos.sl else 0.0
+            tp_dist = abs(pos.tp - current_price) if pos.tp else 0.0
+            trades_obs[i] = [direction, sl_dist, tp_dist]
+        return trades_obs.flatten()
+
+    def _sync_mt5_trades(self) -> None:
+        open_positions = self.mt5.positions_get(symbol=SYMBOL) or []
+        open_count = len(open_positions)
+        our_count = int(np.sum(self.trades_state[:, 0] != 0))
+
+        if open_count < our_count:
+            to_clear = our_count - open_count
+            cleared = 0
+            for i in range(self.num_trades - 1, -1, -1):
+                if self.trades_state[i, 0] != 0 and cleared < to_clear:
+                    self.trades_state[i] = [0, 0, 0, 0]
+                    self.open_slots += 1
+                    cleared += 1
+
+    def _store_trades(self, action, price: float) -> None:
+        sl = price - action.direction.value * (price * action.sl)
+        tp = price + action.direction.value * (price * action.tp)
+        for i in range(self.num_trades):
+            if self.trades_state[i, 0] == 0:
+                self.trades_state[i] = [action.direction.value, price, sl, tp]
+                self.open_slots -= 1
+                break
+
+    def _log(self, message: str) -> None:
+        ts = datetime.datetime.now().strftime("%y-%m-%d %H:%M:%S")
+        line = f"[{ts}] {message}"
+        print(line)
+        with open(self.LOG_FILE, 'a') as f:
+            f.write(line + '\n')
 
     def send_order(self, action):
         if action.direction == Direction.HOLD:
@@ -172,19 +228,19 @@ class LiveTest:
         sl = tp = 0
         order_type = None
         if action.direction == Direction.BUY:
-            price = self.mt5.symbol_info_tick("XAUUSD").ask
+            price = self.mt5.symbol_info_tick(SYMBOL).ask
             order_type = self.mt5.ORDER_TYPE_BUY
             sl = price - (price * action.sl)
             tp = price + (price * action.tp)
         elif action.direction == Direction.SELL:
-            price = self.mt5.symbol_info_tick("XAUUSD").bid
+            price = self.mt5.symbol_info_tick(SYMBOL).bid
             order_type = self.mt5.ORDER_TYPE_SELL
             sl = price + (price * action.sl)
             tp = price - (price * action.tp)
 
         request = {
             "action": self.mt5.TRADE_ACTION_DEAL,
-            "symbol": "XAUUSD",
+            "symbol": SYMBOL,
             "volume": self.trading_vol,
             "type": order_type,
             "sl": sl,
@@ -228,16 +284,33 @@ class LiveTest:
             print(f"TRADE END: {self.time_end}\n")
 
             while True:
-                if datetime.datetime.now() > self.next_time_frame:
+                now = datetime.datetime.now()
+                if now > self.next_time_frame:
                     if self.next_time_frame >= self.time_end:
                         break
 
-                    # use get_market_data to fetch last candlestick
+                    self._get_input_data()
 
-                    # todo Translate in-data to format used in training (normalize, etc)
+                    self._sync_mt5_trades()
 
-                    # todo Let model decide action to take
-                    action = ACTION_SPACE[2]
+                    state = self._build_observation()
+                    with torch.no_grad():
+                        action_index = self.dqn(state.unsqueeze(0)).squeeze().argmax().item()
+
+                    action = ACTION_SPACE[action_index]
+
+                    print(f"[{now}] Action: {action.direction.name}"
+                          f"  sl={action.sl}  tp={action.tp}"
+                          f"  open_slots={self.open_slots}")
+
+                    if action.direction != Direction.HOLD and self.open_slots > 0:
+                        result = self.send_order(action)
+                        if result == 1:
+                            price = (self.mt5.symbol_info_tick("XAUUSD").ask
+                                     if action.direction == Direction.BUY
+                                     else self.mt5.symbol_info_tick("XAUUSD").bid)
+                            self._store_trades(action, price)
+
                     if self.mt5.positions_total() < self.num_trades:
                         self.send_order(action)
 
@@ -262,7 +335,7 @@ class LiveTest:
             eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
             eest_start = self.time_start.astimezone(MT5_TIMEZONE)
             eest_start = eest_start.replace(tzinfo=None)
-            deals = self.mt5.history_deals_get(eest_start, eest_now, group="XAUUSD")
+            deals = self.mt5.history_deals_get(eest_start, eest_now, group=SYMBOL)
 
             try:
                 original_df = pd.read_csv(f'results/live_test/{self.env_id}/{self.env_id}.csv')

@@ -273,7 +273,7 @@ class LiveTest:
 
     def run(self):
         os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
-
+        if self.is_buy_hold: self.num_tests = 1
         for i in range(self.num_tests):
             print(f'build_observation: {self._build_observation()}')
             if self.time_start < datetime.datetime.now():

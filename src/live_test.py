@@ -2,6 +2,7 @@ import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 
+import util
 from util import load_z_score_params
 import argparse
 from time import sleep
@@ -80,6 +81,7 @@ class LiveTest:
 
         self.trades_state = np.zeros((self.num_trades, 4), dtype=np.float32)
         self.trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
+        self.slot_tickets = np.full(self.num_trades, -1, dtype=np.int64)
         self.open_slots = self.num_trades
 
         print(self.num_actions)
@@ -181,36 +183,32 @@ class LiveTest:
         return torch.tensor(obs, dtype=torch.float32, device=DEVICE)
 
     def _build_trades_obs(self, current_price: float) -> np.ndarray:
-        positions = self.mt5.positions_get(symbol=SYMBOL) or []
         trades_obs = np.zeros((self.num_trades, 3), dtype=np.float32)
 
-        for i, pos in enumerate(positions[:self.num_trades]):
-            direction = 1.0 if pos.type == self.mt5.POSITION_TYPE_BUY else -1.0
-            sl_dist = abs(pos.sl - current_price) if pos.sl else 0.0
-            tp_dist = abs(pos.tp - current_price) if pos.tp else 0.0
-            trades_obs[i] = [direction, sl_dist, tp_dist]
+        for i in range(self.num_trades):
+            direction, entry_price, sl, tp = self.trades_state[i]
+            if direction != 0:
+                sl_dist = abs(sl - current_price)
+                tp_dist = abs(tp - current_price)
+                trades_obs[i] = [direction, sl_dist, tp_dist]
         return trades_obs.flatten()
 
     def _sync_mt5_trades(self) -> None:
-        open_positions = self.mt5.positions_get(symbol=SYMBOL) or []
-        open_count = len(open_positions)
-        our_count = int(np.sum(self.trades_state[:, 0] != 0))
+        positions = self.mt5.positions_get(symbol=SYMBOL) or []
+        open_tickets = {pos.ticket for pos in positions}
+        for i in range(self.num_trades):
+            if self.trades_state[i, 0] != 0 and self.slot_tickets[i] not in open_tickets:
+                self.trades_state[i] = [0, 0, 0, 0]
+                self.slot_tickets[i] = -1
+                self.open_slots += 1
 
-        if open_count < our_count:
-            to_clear = our_count - open_count
-            cleared = 0
-            for i in range(self.num_trades - 1, -1, -1):
-                if self.trades_state[i, 0] != 0 and cleared < to_clear:
-                    self.trades_state[i] = [0, 0, 0, 0]
-                    self.open_slots += 1
-                    cleared += 1
-
-    def _store_trades(self, action, price: float) -> None:
+    def _store_trades(self, action, price: float, ticket: int) -> None:
         sl = price - action.direction.value * (price * action.sl)
         tp = price + action.direction.value * (price * action.tp)
         for i in range(self.num_trades):
             if self.trades_state[i, 0] == 0:
                 self.trades_state[i] = [action.direction.value, price, sl, tp]
+                self.slot_tickets[i] = ticket
                 self.open_slots -= 1
                 break
 
@@ -224,7 +222,7 @@ class LiveTest:
     def send_order(self, action):
         if action.direction == Direction.HOLD:
             print(f"[{datetime.datetime.now()}] HOLD POSITION:")
-            return 1
+            return 1, None
 
         sl = tp = 0
         order_type = None
@@ -252,13 +250,13 @@ class LiveTest:
 
         if result is None:
             print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
-            return -1
+            return -1, None
         elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
             print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
-            return -1
+            return -1, None
         else:
             print(f"[{datetime.datetime.now()}] ORDER PLACED")
-            return 1
+            return 1, result.order
 
     def close_all_positions(self):
         for pos in self.mt5.positions_get():
@@ -295,6 +293,7 @@ class LiveTest:
                     self._sync_mt5_trades()
 
                     state = self._build_observation()
+                    print(state)
                     with torch.no_grad():
                         action_index = self.dqn(state.unsqueeze(0)).squeeze().argmax().item()
 
@@ -305,15 +304,12 @@ class LiveTest:
                           f"  open_slots={self.open_slots}")
 
                     if action.direction != Direction.HOLD and self.open_slots > 0:
-                        result = self.send_order(action)
+                        result, ticket = self.send_order(action)
                         if result == 1:
                             price = (self.mt5.symbol_info_tick("XAUUSD").ask
                                      if action.direction == Direction.BUY
                                      else self.mt5.symbol_info_tick("XAUUSD").bid)
-                            self._store_trades(action, price)
-
-                    if self.mt5.positions_total() < self.num_trades:
-                        self.send_order(action)
+                            self._store_trades(action, price, ticket=ticket)
                     else:
                         print(f"[{datetime.datetime.now()}] NO ORDER, TOO MANY TRADES OPEN")
                     self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)

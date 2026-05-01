@@ -26,7 +26,6 @@ WARMUP_BARS = dp.WARMUP_ROWS + 1
 SYMBOL = "XAUUSD"
 
 MT5_TIMEZONE = pytz.timezone("Europe/Helsinki")
-BARS_PER_DAY_M1 = 92 * 15
 
 class LiveTest:
 
@@ -360,7 +359,6 @@ class LiveTest:
             self.next_time_frame = self.time_start
             self.time_end = self.time_start + datetime.timedelta(minutes=self.test_minute_length)
 
-        print(util.calculate_sharpe_ratio(self.equity_curve, BARS_PER_DAY_M1))
         return 1
 
     def calc_stats(self, equity_curve, deals):

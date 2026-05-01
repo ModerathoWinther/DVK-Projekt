@@ -1,10 +1,7 @@
-from collections import deque
-
 import gymnasium as gym
 import numpy as np
 import yaml
 from gymnasium import spaces
-from sympy.physics.quantum.matrixutils import to_numpy
 
 import init_state
 import util
@@ -31,9 +28,12 @@ class TradingEnvironment(gym.Env):
         else:
             self.action_list = ACTION_SPACE
 
+
         self.data_format = params.get('data_format')
-        self.input_data, self.prices = init_state.run(**params)
+        self.input_data, self.prices, self.atr_raw = init_state.run(**params)
         self.data_length = len(self.input_data)
+
+        print(self.atr_raw)
 
         if self.episode_length is None or self.episode_length >= self.data_length:
             self.episode_length = self.data_length - 1
@@ -217,10 +217,19 @@ class TradingEnvironment(gym.Env):
         print(f"Close range       : {closes.min():.4f} to {closes.max():.4f}")
         print(f"Median close      : {np.median(closes):.4f}")
         print(f"Median bar range  : {median_range:.6f}")
+
+        median_atr = 0
         if self.atr:
-            print(f"Median ATR        : {np.median(self.input_data[:, self.col_atr]):.6f}")
+            median_atr = np.median(self.atr_raw[:, ])
+            print(f"Median ATR        : {median_atr:.6f}")
+
         sl_levels = [a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]
         tp_levels = [a.tp for a in ACTION_SPACE if a.direction != Direction.HOLD]
+        closes = self.prices[:, self.col_close]
+        median_close = np.median(closes)
+        print(f"SL as % of close  : {[f'{s * 100:.2f}%' for s in sorted(set(sl_levels))]}")
+        print(
+            f"SL as × ATR       : {[f'{(s * float(median_close)) / float(median_atr):.2f}×' for s in sorted(set(sl_levels))]}")
         print(f"SL levels         : {sorted(set(sl_levels))}")
         print(f"TP levels         : {sorted(set(tp_levels))}")
 

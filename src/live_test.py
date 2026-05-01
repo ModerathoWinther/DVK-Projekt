@@ -2,7 +2,6 @@ import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 
-import util
 from util import load_z_score_params
 import argparse
 from time import sleep
@@ -37,6 +36,8 @@ class LiveTest:
         self.live_test_params = params.get('live_test')
         port = self.live_test_params['port']
         self.is_containerized = self.live_test_params['is_containerized']
+        self.env_make_params = params.get('env_make_params')
+        self.is_buy_hold = self.env_make_params['is_buy_hold']
 
         if self.is_containerized:
             self.mt5 = MetaTrader5(host='localhost', port=port)
@@ -271,7 +272,7 @@ class LiveTest:
 
     def run(self):
         os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
-
+        if self.is_buy_hold: self.num_tests = 1
         for i in range(self.num_tests):
             print(f'build_observation: {self._build_observation()}')
             if self.time_start < datetime.datetime.now():
@@ -287,6 +288,9 @@ class LiveTest:
                     if self.next_time_frame >= self.time_end:
                         break
 
+                    if self.is_buy_hold:
+                        for i in range(5): self.send_order(ACTION_SPACE[2])
+                        break
                     self._get_input_data()
 
                     self._sync_mt5_trades()

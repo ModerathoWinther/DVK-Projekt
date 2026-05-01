@@ -17,10 +17,11 @@ def get_input_data(split, dataset):
 
 def get_prices(split):
     price = pd.read_csv(f"{PRICE_DIR}/{split}.csv", index_col="date", parse_dates=["date"])
-    # atr = pd.read_csv(f'{INDICATOR_DIR}/{split}/atr.csv', index_col="date", parse_dates=["date"])
+    atr = pd.read_csv(f'{INDICATOR_DIR}/{split}/atr.csv', index_col="date", parse_dates=["date"])
+    print(f'\n\nATR: {atr}\n\n')
     price = price[['open', 'high', 'low', 'close']]
-    # print(f'Prices: {price}')
-    return price.to_numpy()
+    return price.to_numpy(), atr.to_numpy()
 
 def run(**params):
-    return get_input_data(params.get('split'), params.get('data_format')), get_prices(params.get('split'))
+    prices, atr = get_prices(params.get('split'))
+    return get_input_data(params.get('split'), params.get('data_format')), prices, atr

@@ -38,15 +38,11 @@ def calculate_sharpe_ratio(equity_curve, bars_per_day) -> float:
     active_returns = returns[returns != 0.0]
     if len(active_returns) < 2:
         return 0.0
-    std_ret = np.std(active_returns, ddof=1)
+    std_ret = np.std(returns, ddof=1)
     if std_ret < 1e-8:
         return 0.0
-    mean_ret = np.mean(active_returns)
+    mean_ret = np.mean(returns)
 
-    total_bars = len(equity_curve)
-    n_trades = len(active_returns)
-    trades_per_year = (n_trades / total_bars) * (252 * bars_per_day)
-
-    sharpe = (mean_ret / std_ret) * np.sqrt(trades_per_year)
+    sharpe = (mean_ret / std_ret) * np.sqrt(252 * bars_per_day)
     return float(sharpe)
 

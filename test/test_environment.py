@@ -146,9 +146,7 @@ class TestTradingEnvironment(unittest.TestCase):
 
         equity = np.array(equity_curve)
         returns = np.diff(equity) / equity[:-1]
-        active_returns = returns[returns != 0.0]
-        trades_per_year = ((len(active_returns) / len(equity)) * (252 * 92))
-        sharpe_ratio = (np.mean(active_returns) / np.std(active_returns, ddof=1)) * np.sqrt(trades_per_year)
+        sharpe_ratio = (np.mean(returns) / np.std(returns, ddof=1)) * np.sqrt(252 * 92)
 
         ep_stats = env.get_episode_stats()[0]
         assert ep_stats.get('closed_trades') == 7

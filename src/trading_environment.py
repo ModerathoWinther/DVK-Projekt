@@ -243,7 +243,7 @@ class TradingEnvironment(gym.Env):
 
 
     def _calc_episode_stats(self):
-        profits = to_numpy(self.closed_trades)
+        profits = np.array(self.closed_trades, dtype=np.float32)
 
         wins = profits[profits > 0]
         losses = profits[profits < 0]

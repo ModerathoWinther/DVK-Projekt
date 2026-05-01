@@ -189,6 +189,7 @@ class LiveTest:
             sl_dist = abs(pos.sl - current_price) if pos.sl else 0.0
             tp_dist = abs(pos.tp - current_price) if pos.tp else 0.0
             trades_obs[i] = [direction, sl_dist, tp_dist]
+            print(f"{sl_dist}")
         return trades_obs.flatten()
 
     def _sync_mt5_trades(self) -> None:

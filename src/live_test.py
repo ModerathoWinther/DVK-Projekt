@@ -1,4 +1,5 @@
 import os
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 
@@ -26,6 +27,7 @@ SYMBOL = "XAUUSD"
 
 MT5_TIMEZONE = pytz.timezone("Europe/Helsinki")
 BARS_PER_DAY_M1 = 92 * 15
+
 
 class LiveTest:
 
@@ -97,7 +99,6 @@ class LiveTest:
         self.equity_curve = []
 
         self.env_id = params.get('env_id')
-
 
     def _get_num_states(self):
         n_states = 0
@@ -271,18 +272,54 @@ class LiveTest:
             }
             self.mt5.order_send(request)
 
+    def send_buy_hold_order(self):
+        price = self.mt5.symbol_info_tick(SYMBOL).ask
+        request = {
+            "action": self.mt5.TRADE_ACTION_DEAL,
+            "symbol": SYMBOL,
+            "volume": self.trading_vol,
+            "type": self.mt5.ORDER_TYPE_BUY,
+            "price": price,
+            "deviation": 50,
+        }
+        result = self.mt5.order_send(request)
+
+        if result is None:
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
+            return -1
+        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
+            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
+            return -1
+        else:
+            print(f"[{datetime.datetime.now()}] ORDER PLACED")
+            return 1
+
+    def close_all_positions_buy_hold(self):
+        for pos in self.mt5.positions_get():
+            request = {
+                "action": self.mt5.TRADE_ACTION_DEAL,
+                "position": pos.ticket,
+                "symbol": pos.symbol,
+                "volume": pos.volume,
+                "type": self.mt5.ORDER_TYPE_SELL,
+                "type_time": self.mt5.ORDER_TIME_GTC,
+                "price": self.mt5.symbol_info_tick(SYMBOL).bid,
+                "deviation": 50,
+            }
+            self.mt5.order_send(request)
+
     def run(self):
         os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
-        if self.is_buy_hold: self.num_tests = 1
+        has_traded = False
+
         for i in range(self.num_tests):
             print(f'build_observation: {self._build_observation()}')
-            if self.time_start < datetime.datetime.now():
-                raise ValueError("TIME START IS IN THE PAST")
+            # if self.time_start < datetime.datetime.now():
+            #     raise ValueError("TIME START IS IN THE PAST")
 
             print(f"\nPROGRAM START: {datetime.datetime.now()}")
             print(f"TRADE START: {self.time_start}")
             print(f"TRADE END: {self.time_end}\n")
-
             while True:
                 now = datetime.datetime.now()
                 if now > self.next_time_frame:
@@ -290,39 +327,45 @@ class LiveTest:
                         break
 
                     if self.is_buy_hold:
-                        for i in range(5): self.send_order(ACTION_SPACE[2])
-                        break
-                    self._get_input_data()
-
-                    self._sync_mt5_trades()
-
-                    state = self._build_observation()
-                    print(state)
-                    with torch.no_grad():
-                        action_index = self.dqn(state.unsqueeze(0)).squeeze().argmax().item()
-
-                    action = ACTION_SPACE[action_index]
-
-                    print(f"[{now}] Action: {action.direction.name}"
-                          f"  sl={action.sl}  tp={action.tp}"
-                          f"  open_slots={self.open_slots}")
-
-                    if action.direction != Direction.HOLD and self.open_slots > 0:
-                        result, ticket = self.send_order(action)
-                        if result == 1:
-                            price = (self.mt5.symbol_info_tick("XAUUSD").ask
-                                     if action.direction == Direction.BUY
-                                     else self.mt5.symbol_info_tick("XAUUSD").bid)
-                            self._store_trades(action, price, ticket=ticket)
+                        if not has_traded:
+                            for _ in range(self.num_trades):
+                                self.send_buy_hold_order()
+                            has_traded = True
                     else:
-                        print(f"[{datetime.datetime.now()}] NO ORDER, TOO MANY TRADES OPEN")
+                        self._get_input_data()
+
+                        self._sync_mt5_trades()
+
+                        state = self._build_observation()
+                        print(state)
+                        with torch.no_grad():
+                            action_index = self.dqn(state.unsqueeze(0)).squeeze().argmax().item()
+
+                        action = ACTION_SPACE[action_index]
+
+                        print(f"[{now}] Action: {action.direction.name}"
+                              f"  sl={action.sl}  tp={action.tp}"
+                              f"  open_slots={self.open_slots}")
+
+                        if action.direction != Direction.HOLD and self.open_slots > 0:
+                            result, ticket = self.send_order(action)
+                            if result == 1:
+                                price = (self.mt5.symbol_info_tick(SYMBOL).ask
+                                         if action.direction == Direction.BUY
+                                         else self.mt5.symbol_info_tick(SYMBOL).bid)
+                                self._store_trades(action, price, ticket=ticket)
+                        else:
+                            print(f"[{datetime.datetime.now()}] NO ORDER, TOO MANY TRADES OPEN")
+
                     self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
                     self.equity_curve.append(self.mt5.account_info().balance)
                 else:
                     sleep(0.01)
 
-
-            self.close_all_positions()
+            if self.is_buy_hold:
+                self.close_all_positions_buy_hold()
+            else:
+                self.close_all_positions()
             print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
 
             # Let terminal save deals
@@ -390,6 +433,7 @@ class LiveTest:
             "expectancy": expectancy,
             "max_drawdown": max_drawdown,
         }
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MT5 login details.')

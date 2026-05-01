@@ -188,8 +188,8 @@ class LiveTest:
         for i in range(self.num_trades):
             direction, entry_price, sl, tp = self.trades_state[i]
             if direction != 0:
-                sl_dist = abs(sl - current_price)
-                tp_dist = abs(tp - current_price)
+                sl_dist = abs(sl - current_price) / current_price
+                tp_dist = abs(tp - current_price) / current_price
                 trades_obs[i] = [direction, sl_dist, tp_dist]
         return trades_obs.flatten()
 

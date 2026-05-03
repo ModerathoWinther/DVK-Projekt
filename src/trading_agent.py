@@ -22,6 +22,7 @@ DATE_FORMAT = "%y-%m-%d %H:%M:%S"
 RESULTS_DIR = 'results'
 DEVICE = 'cpu'
 
+
 class TradingAgent:
 
     def __init__(self, hyperparameter_set):
@@ -269,9 +270,7 @@ class TradingAgent:
                         step_count = 0
                 print(log_message)
             elif self.split == 'test':
-                ep_stats = env.get_episode_stats
-                print("reward", episode_reward)
-                print(env.get_episode_stats())
+                ep_stats = env.get_episode_stats()
 
                 os.makedirs(f'results/backtest/{self.env_id}', exist_ok=True)
                 df = pd.DataFrame(ep_stats)

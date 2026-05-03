@@ -28,7 +28,6 @@ class TradingEnvironment(gym.Env):
         else:
             self.action_list = ACTION_SPACE
 
-
         self.data_format = params.get('data_format')
         self.input_data, self.prices, self.atr_raw = init_state.run(**params)
         self.data_length = len(self.input_data)
@@ -98,8 +97,7 @@ class TradingEnvironment(gym.Env):
             self.current_step = np.random.randint(0, self.max_start)
             self.episode_end = self.current_step + self.episode_length
         else:
-            self.current_step = 0
-            self.episode_end = self.episode_length - 1
+            self.episode_end = self.current_step + self.episode_length - 1
 
         if len(self.closed_trades) > 0:
             episode_stats = self._calc_episode_stats()
@@ -259,10 +257,19 @@ class TradingEnvironment(gym.Env):
         wins = profits[profits > 0]
         losses = profits[profits < 0]
 
-        win_rate = len(wins) / len(profits)
-        loss_rate = len(losses) / len(profits)
-        profit_factor = wins.sum() / abs(losses.sum())
-        expectancy = profits.mean()
+        # win_rate = len(wins) / len(profits)
+        # loss_rate = len(losses) / len(profits)
+        # profit_factor = wins.sum() / abs(losses.sum())
+        # expectancy = profits.mean()
+        num_profits = len(profits)
+        win_rate = len(wins) / num_profits if num_profits > 0 else 0
+        loss_rate = len(losses) / num_profits if num_profits > 0 else 0
+
+        sum_losses = abs(losses.sum())
+        profit_factor = wins.sum() / sum_losses if sum_losses > 0 else (wins.sum() if wins.sum() > 0 else 0)
+
+        expectancy = profits.mean() if num_profits > 0 else 0
+
 
         equity_curve = np.array(self.equity_curve)
         peak = np.maximum.accumulate(equity_curve)
@@ -272,6 +279,7 @@ class TradingEnvironment(gym.Env):
         sharpe_ratio = util.calculate_sharpe_ratio(equity_curve, BARS_PER_DAY)
 
         stats = {
+            'id': '',
             "closed_trades": len(self.closed_trades),
             "win_rate": win_rate,
             "loss_rate": loss_rate,

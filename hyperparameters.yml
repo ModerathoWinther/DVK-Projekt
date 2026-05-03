@@ -1,0 +1,539 @@
+midas-local:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 08:15:00"
+    time_frame_minute_size: 1
+    test_minute_length: 2
+    trading_volume: 0.1
+    port: 8001
+    is_containerized: False
+    num_tests: 1
+  env_id: 'midas-local'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+midas-train1:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "ohlcv"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 01:59:00"
+    time_frame_minute_size: 1
+    test_minute_length: 2
+    trading_volume: 0.1
+    port: 8001
+    is_containerized: False
+  env_id: 'midas-train1'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+######## OHLCV #########
+midas-ohlcv:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "ohlcv"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-04-30 22:17:00"
+    time_frame_minute_size: 1
+    test_minute_length: 2
+    trading_volume: 0.1
+    port: 8001
+    is_containerized: True
+  env_id: 'midas-ohlcv'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+######### WICK #########
+midas-wick:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "ohlcv"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 09:30:00"
+    time_frame_minute_size: 1
+    test_minute_length: 2
+    trading_volume: 0.1
+    port: 8001
+    is_containerized: True
+  env_id: 'midas-wick'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+################ INDICATOR PROFILES ################
+
+midas-all-indicators:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8001
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-all-indicators'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+midas-price-only:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8002
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-price-only'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+# ATR, ATR+RSI, ATR+RSI+MACD
+
+midas-atr:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8003
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-atr'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+midas-atr-rsi:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8004
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-atr-rsi'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+midas-atr-macd:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8005
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-atr-macd'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+# RSI, RSI+ATR, RSI+MACD
+
+midas-rsi:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8006
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-rsi'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+# MACD, MACD+ATR, MACD+RSI
+
+midas-macd:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8007
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-macd'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+midas-macd-rsi:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: False
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:44:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8008
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-macd-rsi'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500
+
+midas-hold:
+  env_make_params:
+    split: "train"
+    num_trades: 5
+    atr: true
+    macd: true
+    rsi: true
+    initial_capital: 10000.0
+    transaction_cost: 0.0002
+    data_format: "wick"
+    episode_length: 5000
+    is_buy_hold: True
+  validation:
+    val_frequency_episode: 10
+    val_episodes: 5
+    save_best_metric: "sharpe"
+    deterministic: True
+    epsilon: 0.025
+  live_test:
+    time_start: "2026-05-01 10:00:00"
+    time_frame_minute_size: 1
+    test_minute_length: 10
+    trading_volume: 0.1
+    port: 8009
+    is_containerized: True
+    num_tests: 73
+  env_id: 'midas-hold'
+  learning_rate_a: 0.0001
+  epsilon_init: 1.0
+  epsilon_decay: 0.999997
+  epsilon_min: 0.05
+  discount_factor_g: 0.999
+  fc1_nodes: 512
+  replay_memory_size: 1000000
+  network_sync_rate: 25000
+  enable_double_dqn: true
+  enable_dueling_dqn: true
+  min_buffer_fill: 10000
+  mini_batch_size: 256
+  max_episodes: 500

@@ -41,10 +41,8 @@ class LiveTest:
 
         if self.is_containerized:
             self.mt5 = MetaTrader5(host='localhost', port=port)
-
         else:
             self.mt5 = mt5_local
-            mt5_local.initialize()
 
         self.mt5.initialize()
         print(self.mt5.account_info())
@@ -117,7 +115,6 @@ class LiveTest:
     def get_market_data(self) -> pd.DataFrame:
         rates = self.mt5.copy_rates_from_pos(SYMBOL, self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
-        print(df)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
         df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
@@ -215,7 +212,7 @@ class LiveTest:
     def _log(self, message: str) -> None:
         ts = datetime.datetime.now().strftime("%y-%m-%d %H:%M:%S")
         line = f"[{ts}] {message}"
-        print(line)
+        #print(line)
         with open(self.LOG_FILE, 'a') as f:
             f.write(line + '\n')
 
@@ -258,6 +255,26 @@ class LiveTest:
             print(f"[{datetime.datetime.now()}] ORDER PLACED")
             return 1, result.order
 
+    def send_buy_hold_order(self):
+        request = {
+            "action": self.mt5.TRADE_ACTION_DEAL,
+            "symbol": SYMBOL,
+            "volume": self.trading_vol,
+            "type": self.mt5.ORDER_TYPE_BUY,
+        }
+
+        result = self.mt5.order_send(request)
+
+        if result is None:
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
+            return -1, None
+        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
+            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
+            return -1, None
+        else:
+            print(f"[{datetime.datetime.now()}] ORDER PLACED")
+            return 1, result.order
+
     def close_all_positions(self):
         for pos in self.mt5.positions_get():
             request = {
@@ -272,9 +289,8 @@ class LiveTest:
 
     def run(self):
         os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
-        if self.is_buy_hold: self.num_tests = 1
+
         for i in range(self.num_tests):
-            print(f'build_observation: {self._build_observation()}')
             if self.time_start < datetime.datetime.now():
                 raise ValueError("TIME START IS IN THE PAST")
 
@@ -289,32 +305,30 @@ class LiveTest:
                         break
 
                     if self.is_buy_hold:
-                        for i in range(5): self.send_order(ACTION_SPACE[2])
-                        break
-                    self._get_input_data()
-
-                    self._sync_mt5_trades()
-
-                    state = self._build_observation()
-                    print(state)
-                    with torch.no_grad():
-                        action_index = self.dqn(state.unsqueeze(0)).squeeze().argmax().item()
-
-                    action = ACTION_SPACE[action_index]
-
-                    print(f"[{now}] Action: {action.direction.name}"
-                          f"  sl={action.sl}  tp={action.tp}"
-                          f"  open_slots={self.open_slots}")
-
-                    if action.direction != Direction.HOLD and self.open_slots > 0:
-                        result, ticket = self.send_order(action)
-                        if result == 1:
-                            price = (self.mt5.symbol_info_tick("XAUUSD").ask
-                                     if action.direction == Direction.BUY
-                                     else self.mt5.symbol_info_tick("XAUUSD").bid)
-                            self._store_trades(action, price, ticket=ticket)
+                        if self.time_start == self.next_time_frame:
+                            for _ in range(self.num_trades):
+                                self.send_buy_hold_order()
+                        else:
+                            print(f"[{datetime.datetime.now()}] HOLDING")
                     else:
-                        print(f"[{datetime.datetime.now()}] NO ORDER, TOO MANY TRADES OPEN")
+                        self._get_input_data()
+                        self._sync_mt5_trades()
+                        state = self._build_observation()
+
+                        with torch.no_grad():
+                            action_index = self.dqn(state.unsqueeze(0)).squeeze().argmax().item()
+
+                        action = ACTION_SPACE[action_index]
+                        if action.direction != Direction.HOLD and self.open_slots > 0:
+                            result, ticket = self.send_order(action)
+                            if result == 1:
+                                price = (self.mt5.symbol_info_tick("XAUUSD").ask
+                                         if action.direction == Direction.BUY
+                                         else self.mt5.symbol_info_tick("XAUUSD").bid)
+                                self._store_trades(action, price, ticket=ticket)
+                        else:
+                            print(f"[{datetime.datetime.now()}] NO ORDER, TOO MANY TRADES OPEN")
+
                     self.next_time_frame += datetime.timedelta(minutes=self.time_frame_minute_size)
                     self.equity_curve.append(self.mt5.account_info().balance)
                 else:
@@ -336,7 +350,13 @@ class LiveTest:
             eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
             eest_start = self.time_start.astimezone(MT5_TIMEZONE)
             eest_start = eest_start.replace(tzinfo=None)
+
             deals = self.mt5.history_deals_get(eest_start, eest_now, group=SYMBOL)
+
+            print(f"Query start: {eest_start}")
+            print(f"Query end:   {eest_now}")
+            print(len(deals))
+            print(self.mt5.last_error())
 
             try:
                 original_df = pd.read_csv(f'results/live_test/{self.env_id}/{self.env_id}.csv')

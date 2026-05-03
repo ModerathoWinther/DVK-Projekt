@@ -1,5 +1,4 @@
 import os
-
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.chdir('..')
 
@@ -26,8 +25,6 @@ WARMUP_BARS = dp.WARMUP_ROWS + 1
 SYMBOL = "XAUUSD"
 
 MT5_TIMEZONE = pytz.timezone("Europe/Helsinki")
-BARS_PER_DAY_M1 = 92 * 15
-
 
 class LiveTest:
 
@@ -44,10 +41,8 @@ class LiveTest:
 
         if self.is_containerized:
             self.mt5 = MetaTrader5(host='localhost', port=port)
-
         else:
             self.mt5 = mt5_local
-            mt5_local.initialize()
 
         self.mt5.initialize()
         print(self.mt5.account_info())
@@ -100,6 +95,7 @@ class LiveTest:
 
         self.env_id = params.get('env_id')
 
+
     def _get_num_states(self):
         n_states = 0
         if self.atr: n_states += 1
@@ -119,7 +115,6 @@ class LiveTest:
     def get_market_data(self) -> pd.DataFrame:
         rates = self.mt5.copy_rates_from_pos(SYMBOL, self.mt5.TIMEFRAME_M1, 0, WARMUP_BARS)
         df = pd.DataFrame(rates)
-        print(df)
         df = df.rename(columns={'tick_volume': 'volume', 'time': 'date'})
         df['date'] = pd.to_datetime(df['date'], unit='s')
         df = df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
@@ -217,7 +212,7 @@ class LiveTest:
     def _log(self, message: str) -> None:
         ts = datetime.datetime.now().strftime("%y-%m-%d %H:%M:%S")
         line = f"[{ts}] {message}"
-        print(line)
+        #print(line)
         with open(self.LOG_FILE, 'a') as f:
             f.write(line + '\n')
 
@@ -260,6 +255,26 @@ class LiveTest:
             print(f"[{datetime.datetime.now()}] ORDER PLACED")
             return 1, result.order
 
+    def send_buy_hold_order(self):
+        request = {
+            "action": self.mt5.TRADE_ACTION_DEAL,
+            "symbol": SYMBOL,
+            "volume": self.trading_vol,
+            "type": self.mt5.ORDER_TYPE_BUY,
+        }
+
+        result = self.mt5.order_send(request)
+
+        if result is None:
+            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
+            return -1, None
+        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
+            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
+            return -1, None
+        else:
+            print(f"[{datetime.datetime.now()}] ORDER PLACED")
+            return 1, result.order
+
     def close_all_positions(self):
         for pos in self.mt5.positions_get():
             request = {
@@ -272,54 +287,17 @@ class LiveTest:
             }
             self.mt5.order_send(request)
 
-    def send_buy_hold_order(self):
-        price = self.mt5.symbol_info_tick(SYMBOL).ask
-        request = {
-            "action": self.mt5.TRADE_ACTION_DEAL,
-            "symbol": SYMBOL,
-            "volume": self.trading_vol,
-            "type": self.mt5.ORDER_TYPE_BUY,
-            "price": price,
-            "deviation": 50,
-        }
-        result = self.mt5.order_send(request)
-
-        if result is None:
-            print(f"[{datetime.datetime.now()}] ORDER_SEND FAILED, ERROR: {self.mt5.last_error()}")
-            return -1
-        elif result.retcode != self.mt5.TRADE_RETCODE_DONE:
-            print(f"[{datetime.datetime.now()}] ORDER REJECTED: {result.retcode}, {result.comment}")
-            return -1
-        else:
-            print(f"[{datetime.datetime.now()}] ORDER PLACED")
-            return 1
-
-    def close_all_positions_buy_hold(self):
-        for pos in self.mt5.positions_get():
-            request = {
-                "action": self.mt5.TRADE_ACTION_DEAL,
-                "position": pos.ticket,
-                "symbol": pos.symbol,
-                "volume": pos.volume,
-                "type": self.mt5.ORDER_TYPE_SELL,
-                "type_time": self.mt5.ORDER_TIME_GTC,
-                "price": self.mt5.symbol_info_tick(SYMBOL).bid,
-                "deviation": 50,
-            }
-            self.mt5.order_send(request)
-
     def run(self):
         os.makedirs(f'results/live_test/{self.env_id}', exist_ok=True)
-        has_traded = False
 
         for i in range(self.num_tests):
-            print(f'build_observation: {self._build_observation()}')
-            # if self.time_start < datetime.datetime.now():
-            #     raise ValueError("TIME START IS IN THE PAST")
+            if self.time_start < datetime.datetime.now():
+                raise ValueError("TIME START IS IN THE PAST")
 
             print(f"\nPROGRAM START: {datetime.datetime.now()}")
             print(f"TRADE START: {self.time_start}")
             print(f"TRADE END: {self.time_end}\n")
+
             while True:
                 now = datetime.datetime.now()
                 if now > self.next_time_frame:
@@ -327,32 +305,26 @@ class LiveTest:
                         break
 
                     if self.is_buy_hold:
-                        if not has_traded:
+                        if self.time_start == self.next_time_frame:
                             for _ in range(self.num_trades):
                                 self.send_buy_hold_order()
-                            has_traded = True
+                        else:
+                            print(f"[{datetime.datetime.now()}] HOLDING")
                     else:
                         self._get_input_data()
-
                         self._sync_mt5_trades()
-
                         state = self._build_observation()
-                        print(state)
+
                         with torch.no_grad():
                             action_index = self.dqn(state.unsqueeze(0)).squeeze().argmax().item()
 
                         action = ACTION_SPACE[action_index]
-
-                        print(f"[{now}] Action: {action.direction.name}"
-                              f"  sl={action.sl}  tp={action.tp}"
-                              f"  open_slots={self.open_slots}")
-
                         if action.direction != Direction.HOLD and self.open_slots > 0:
                             result, ticket = self.send_order(action)
                             if result == 1:
-                                price = (self.mt5.symbol_info_tick(SYMBOL).ask
+                                price = (self.mt5.symbol_info_tick("XAUUSD").ask
                                          if action.direction == Direction.BUY
-                                         else self.mt5.symbol_info_tick(SYMBOL).bid)
+                                         else self.mt5.symbol_info_tick("XAUUSD").bid)
                                 self._store_trades(action, price, ticket=ticket)
                         else:
                             print(f"[{datetime.datetime.now()}] NO ORDER, TOO MANY TRADES OPEN")
@@ -362,10 +334,8 @@ class LiveTest:
                 else:
                     sleep(0.01)
 
-            if self.is_buy_hold:
-                self.close_all_positions_buy_hold()
-            else:
-                self.close_all_positions()
+
+            self.close_all_positions()
             print(f"\nTRADING FINISHED AT: {datetime.datetime.now()}")
 
             # Let terminal save deals
@@ -380,7 +350,13 @@ class LiveTest:
             eest_now = datetime.datetime.now(MT5_TIMEZONE).replace(tzinfo=None)
             eest_start = self.time_start.astimezone(MT5_TIMEZONE)
             eest_start = eest_start.replace(tzinfo=None)
+
             deals = self.mt5.history_deals_get(eest_start, eest_now, group=SYMBOL)
+
+            print(f"Query start: {eest_start}")
+            print(f"Query end:   {eest_now}")
+            print(len(deals))
+            print(self.mt5.last_error())
 
             try:
                 original_df = pd.read_csv(f'results/live_test/{self.env_id}/{self.env_id}.csv')
@@ -407,7 +383,6 @@ class LiveTest:
             self.next_time_frame = self.time_start
             self.time_end = self.time_start + datetime.timedelta(minutes=self.test_minute_length)
 
-        print(util.calculate_sharpe_ratio(self.equity_curve, BARS_PER_DAY_M1))
         return 1
 
     def calc_stats(self, equity_curve, deals):
@@ -433,7 +408,6 @@ class LiveTest:
             "expectancy": expectancy,
             "max_drawdown": max_drawdown,
         }
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='MT5 login details.')

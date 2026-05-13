@@ -1,0 +1,4 @@
+eval_results/** linguist-generated=true
+results/** linguist-generated=true
+data/** linguist-generated=true
+src/*.py linguist-language=Python

@@ -70,7 +70,7 @@ class StatisticalAnalysis:
             stat, p = kruskal(*groups)
             return stat, p, 'Kruskal-Wallis'
 
-    def _run_dunnett(self, metric: str, control: str = 'buy-hold') -> pd.DataFrame:
+    def _run_dunnett(self, metric: str, control: str = 'midas-hold') -> pd.DataFrame:
 
         control_vals = self.backtest_results[control][metric].dropna().values
         treatment_agents = [name for name in self.backtest_results if name != control]

@@ -5,7 +5,7 @@ from trading_environment import TradingEnvironment
 
 with open('../hyperparameters.yml', 'r') as file:
     all_hyperparameter_sets = yaml.safe_load(file)
-    hyperparameters = all_hyperparameter_sets["midas-train1"]
+    hyperparameters = all_hyperparameter_sets["midas-hold"]
 env_make_params = hyperparameters.get('env_make_params', {})
 
 env = TradingEnvironment(env_make_params)

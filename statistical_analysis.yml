@@ -1,0 +1,9 @@
+models:
+  midas-all-indicators: 'midas-all-indicators'
+  midas-atr-: 'midas-atr'
+  midas-atr-macd: 'midas-atr-macd'
+  midas-atr-rsi: 'midas-atr-rsi'
+  midas-macd: 'midas-macd'
+  midas-macd-rsi: 'midas-macd-rsi'
+  midas-rsi: 'midas-rsi'
+  midas-price-only: 'midas-price-only'

@@ -1,7 +1,7 @@
 import pandas as pd
 
-import data_process
-from data_process import Z_SCORE_INDICATOR_DIR, Z_SCORE_OHLCV_DIR, Z_SCORE_WICK_DIR,INDICATOR_DIR, NON_NORMAL_DIR as PRICE_DIR
+from data_process import Z_SCORE_INDICATOR_DIR, Z_SCORE_OHLCV_DIR, Z_SCORE_WICK_DIR, INDICATOR_DIR, \
+    NON_NORMAL_DIR as PRICE_DIR
 
 
 def get_input_data(split, dataset):
@@ -11,6 +11,8 @@ def get_input_data(split, dataset):
 
     frames = [price, pd.read_csv(f"{Z_SCORE_INDICATOR_DIR}/{split}.csv",
                                  index_col="date", parse_dates=["date"])]
+
+
     input_data = pd.concat(frames, axis=1).dropna()
     print(f"INIT_STATE WITH: split: {split}, dataset: {dataset}\t and data: {input_data}")
     return input_data.to_numpy()
@@ -18,7 +20,6 @@ def get_input_data(split, dataset):
 def get_prices(split):
     price = pd.read_csv(f"{PRICE_DIR}/{split}.csv", index_col="date", parse_dates=["date"])
     atr = pd.read_csv(f'{INDICATOR_DIR}/{split}/atr.csv', index_col="date", parse_dates=["date"])
-    print(f'\n\nATR: {atr}\n\n')
     price = price[['open', 'high', 'low', 'close']]
     return price.to_numpy(), atr.to_numpy()
 

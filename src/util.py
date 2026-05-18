@@ -1,9 +1,10 @@
+import json
 import os
 
 import numpy as np
 
 import data_process as dp
-import json
+
 
 def load_z_score_params(data_format, atr, macd):
     path = os.path.join(f'{dp.NORMALIZED_DIR}/zscores.json')
@@ -28,7 +29,7 @@ def load_z_score_params(data_format, atr, macd):
     return active_params
 
 
-def calculate_sharpe_ratio(equity_curve, bars_per_day) -> float:
+def calculate_sharpe_ratio(equity_curve) -> float:
     if len(equity_curve) < 2:
         return 0.0
     equity = np.array(equity_curve)
@@ -43,6 +44,6 @@ def calculate_sharpe_ratio(equity_curve, bars_per_day) -> float:
         return 0.0
     mean_ret = np.mean(returns)
 
-    sharpe = (mean_ret / std_ret) * np.sqrt(252 * bars_per_day)
+    sharpe = (mean_ret / std_ret) * np.sqrt(252)
     return float(sharpe)
 

@@ -380,8 +380,6 @@ if __name__ == '__main__':
     parser.add_argument('--train', help='Training mode', action='store_true')
     args = parser.parse_args()
 
-
-
     midas = TradingAgent(hyperparameter_set=args.hyperparameters)
 
     if args.train:

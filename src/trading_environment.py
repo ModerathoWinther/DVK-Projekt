@@ -27,7 +27,7 @@ class TradingEnvironment(gym.Env):
             self.action_list = UNIT_TEST_ACTION_SPACE
         else:
             self.action_list = ACTION_SPACE
-
+        self.sharpe = []
         self.data_format = params.get('data_format')
         self.input_data, self.prices, self.atr_raw = init_state.run(**params)
         self.data_length = len(self.input_data)
@@ -38,7 +38,7 @@ class TradingEnvironment(gym.Env):
             self.episode_length = self.data_length - 1
             self.max_start = 0
         else:
-            self.max_start = self.data_length - self.episode_length - 1
+            self.max_start = self.data_length - 1
         self.current_step = 0
         self.episode_end = self.episode_length
 
@@ -97,7 +97,7 @@ class TradingEnvironment(gym.Env):
             self.current_step = np.random.randint(0, self.max_start)
             self.episode_end = self.current_step + self.episode_length
         else:
-            self.episode_end = self.current_step + self.episode_length - 1
+            self.episode_end = self.current_step + self.episode_length
 
         if len(self.closed_trades) > 0:
             episode_stats = self._calc_episode_stats()
@@ -119,7 +119,6 @@ class TradingEnvironment(gym.Env):
 
         self.current_step += 1
         self.current_equity += realized_pnl
-
         is_last_step = (self.current_step + 1) >= self.episode_end
         if is_last_step:
             current_prices = self.prices[self.current_step]
@@ -223,13 +222,13 @@ class TradingEnvironment(gym.Env):
 
         sl_levels = [a.sl for a in ACTION_SPACE if a.direction != Direction.HOLD]
         tp_levels = [a.tp for a in ACTION_SPACE if a.direction != Direction.HOLD]
-        closes = self.prices[:, self.col_close]
-        median_close = np.median(closes)
-        print(f"SL as % of close  : {[f'{s * 100:.2f}%' for s in sorted(set(sl_levels))]}")
-        print(
-            f"SL as × ATR       : {[f'{(s * float(median_close)) / float(median_atr):.2f}×' for s in sorted(set(sl_levels))]}")
-        print(f"SL levels         : {sorted(set(sl_levels))}")
-        print(f"TP levels         : {sorted(set(tp_levels))}")
+        # closes = self.prices[:, self.col_close]
+        # median_close = np.median(closes)
+        # print(f"SL as % of close  : {[f'{s * 100:.2f}%' for s in sorted(set(sl_levels))]}")
+        # print(
+        #     f"SL as × ATR       : {[f'{(s * float(median_close)) / float(median_atr):.2f}×' for s in sorted(set(sl_levels))]}")
+        # print(f"SL levels         : {sorted(set(sl_levels))}")
+        # print(f"TP levels         : {sorted(set(tp_levels))}")
 
         print(f"Tightest SL / bar range: {min(sl_levels) / median_range:.2f}×")
 
@@ -270,13 +269,12 @@ class TradingEnvironment(gym.Env):
 
         expectancy = profits.mean() if num_profits > 0 else 0
 
-
         equity_curve = np.array(self.equity_curve)
         peak = np.maximum.accumulate(equity_curve)
         drawdowns = (equity_curve - peak) / peak
         max_drawdown = np.min(drawdowns)
 
-        sharpe_ratio = util.calculate_sharpe_ratio(equity_curve, BARS_PER_DAY)
+        sharpe_ratio = util.calculate_sharpe_ratio(equity_curve)
 
         stats = {
             'id': '',
@@ -287,6 +285,7 @@ class TradingEnvironment(gym.Env):
             "expectancy": expectancy,
             "max_drawdown": max_drawdown,
             "sharpe_ratio": sharpe_ratio,
+            "current_equity": self.current_equity
         }
         return stats
 

@@ -39,12 +39,13 @@ filepath = os.path.join(curr_dir, "raw_unit_test.csv")
 os.makedirs(os.path.join(curr_dir, "../data/raw/unit_test"), exist_ok=True)
 os.makedirs(os.path.join(curr_dir, "../data/processed/non_normalized/indicators/unit_test"), exist_ok=True)
 shutil.copyfile(filepath, os.path.join(curr_dir, "../data/raw/unit_test/raw_unit_test.csv"))
-shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/non_normalized/indicators/unit_test/unit_test.csv"))
+shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/non_normalized/indicators/unit_test/atr.csv"))
 shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/non_normalized/unit_test.csv"))
 shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/normalized/ohlcv/unit_test.csv"))
 shutil.copyfile(filepath, os.path.join(curr_dir, "../data/processed/normalized/indicators/unit_test.csv"))
 
-
+# IMPORTANT - TEST IS NOT UPDATED TO ACCOUNT FOR UNREALIZED PNL IN EQUITY CURVE,
+# SHARPE RATIO, MAX DD AND EQUITY CURVE TESTS WILL THEREFORE FAIL
 class TestTradingEnvironment(unittest.TestCase):
 
     def normalize_return(self, pnl):
@@ -190,6 +191,7 @@ class TestTradingEnvironment(unittest.TestCase):
         env.step(HOLD_ACTION)
         env.step(HOLD_ACTION)  # One trade hit sl
 
+        # Not updated for unrealized pnl
         equity_curve = env.equity_curve
         assert len(equity_curve) == 12
         assert equity_curve[0] == env.initial_capital

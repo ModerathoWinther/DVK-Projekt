@@ -499,7 +499,7 @@ midas-macd-rsi:
 
 midas-hold:
   env_make_params:
-    split: "train"
+    split: "test"
     num_trades: 5
     atr: true
     macd: true
@@ -507,7 +507,7 @@ midas-hold:
     initial_capital: 10000.0
     transaction_cost: 0.0002
     data_format: "wick"
-    episode_length: 5000
+    episode_length: 920
     is_buy_hold: True
   validation:
     val_frequency_episode: 10
@@ -536,4 +536,4 @@ midas-hold:
   enable_dueling_dqn: true
   min_buffer_fill: 10000
   mini_batch_size: 256
-  max_episodes: 500
+  max_episodes: 50

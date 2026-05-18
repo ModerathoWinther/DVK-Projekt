@@ -114,6 +114,7 @@ class TradingEnvironment(gym.Env):
         current_prices = self.prices[self.current_step]
         open, high, low, close = current_prices[self.col_open], current_prices[self.col_high], current_prices[self.col_low], current_prices[self.col_close]
         prev_equity = self.current_equity
+        unrealized_pnl = 0
 
         realized_pnl, _ = self._process_trades(open, high, low)
 
@@ -130,13 +131,17 @@ class TradingEnvironment(gym.Env):
             self.current_equity += term_r
 
         else:
+            unrealized_pnl = self._get_unrealized_pnl(close)
             action = self.action_list[action]
             self._process_action(action)
 
-        self._update_trades_obs(close)
+        current_prices = self.prices[self.current_step]
+        open, close = current_prices[self.col_open], current_prices[self.col_close]
+
+        self._update_trades_obs(open)
         reward = ((self.current_equity - prev_equity) / prev_equity) * 1000
 
-        self.equity_curve.append(self.current_equity)
+        self.equity_curve.append(self.current_equity + unrealized_pnl)
         return self._get_observation(), reward, is_last_step, False, {}
 
     def _get_observation(self):
@@ -204,6 +209,18 @@ class TradingEnvironment(gym.Env):
                 self.trades_obs[i] = [direction, sl_dist, tp_dist]
             else:
                 self.trades_obs[i] = [0.0, 0.0, 0.0]
+
+    def _get_unrealized_pnl(self, close):
+        unrealized_pnl = 0.0
+        for i in range(self.num_trades):
+            if self.trades_state[i, 0] == 0:
+                continue
+
+            direction, entry_price, _, _ = self.trades_state[i]
+
+            pnl = (close - entry_price) * direction
+            unrealized_pnl += pnl
+        return unrealized_pnl
 
     def _log_init_diagnostics(self):
         closes = self.input_data[:, self.col_close]

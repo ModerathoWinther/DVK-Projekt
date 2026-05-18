@@ -29,3 +29,6 @@ for direction, sl, tp in product([Direction.BUY, Direction.SELL], SL_LEVELS, TP_
     i += 1
 
 UNIT_TEST_ACTION_SPACE = [HOLD_ACTION, Action(Direction.BUY, 0.01, 0.02, 1), Action(Direction.SELL, 0.01, 0.02, 2)]
+
+if __name__ == "__main__":
+    print(ACTION_SPACE)

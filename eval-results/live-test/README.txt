@@ -1,0 +1,2 @@
+This live test was performed in a time span of 10 hours on 1 minute time frames (agents were trained on 15 minutes) due to time limitations.
+It was therefore decided to not use this data in the thesis, since there are too many limitations to make any conclusions from the data.

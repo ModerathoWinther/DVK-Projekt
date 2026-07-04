@@ -157,13 +157,13 @@ merely converging on a weak one.
 
 <p align="center"><b>ATR agent</b></p>
 <p align="center">
-  <img alt="ATR agent training curves" src="midas-models/atr/midas-atr.png" width="600"/>
+  <img alt="ATR agent training curves" src="midas-models/atr/midas-atr.png" width="400"/>
 </p>
 <p align="center">Training reward converges smoothly; validation tracks training closely.</p>
 
 <p align="center"><b>MACD agent</b></p>
 <p align="center">
-  <img alt="MACD agent training curves" src="midas-models/macd/midas-macd.png" width="600"/>
+  <img alt="MACD agent training curves" src="midas-models/macd/midas-macd.png" width="400"/>
 </p>
 <p align="center">Erratic training; validation completely decoupled from training — a clear non-convergence signature.</p>
 

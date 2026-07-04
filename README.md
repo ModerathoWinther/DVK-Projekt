@@ -155,19 +155,18 @@ strong sign that it failed to converge on a stable policy rather than
 merely converging on a weak one.
 
 
+<p align="center"><b>ATR agent</b></p>
+<p align="center">
+  <img alt="ATR agent training curves" src="midas-models/atr/midas-atr.png" width="600"/>
+</p>
+<p align="center">Training reward converges smoothly; validation tracks training closely.</p>
 
-<table>
-  <tr>
-    <td align="center">
-      <img alt="ATR agent training curves" src="midas-models/atr/midas-atr.png" width="360" height="600"/><br />
-      <sub><b>ATR agent:</b> training reward converges smoothly, validation tracks training closely.</sub>
-    </td>
-    <td align="center">
-      <img alt="MACD agent training curves" src="midas-models/macd/midas-macd.png" width="360" height="600"/><br />
-      <sub><b>MACD agent:</b> erratic training, validation completely decoupled from training — a clear non-convergence signature.</sub>
-    </td>
-  </tr>
-</table>
+<p align="center"><b>MACD agent</b></p>
+<p align="center">
+  <img alt="MACD agent training curves" src="midas-models/macd/midas-macd.png" width="600"/>
+</p>
+<p align="center">Erratic training; validation completely decoupled from training — a clear non-convergence signature.</p>
+
 
 
 
